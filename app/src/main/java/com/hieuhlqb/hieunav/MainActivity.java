@@ -7,6 +7,7 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
+import android.speech.tts.TextToSpeech;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
@@ -18,11 +19,24 @@ public class MainActivity extends Activity implements LocationListener {
     private static final int LOCATION_REQUEST = 1001;
     private WebView webView;
     private LocationManager locationManager;
+    private TextToSpeech tts;
+    private boolean ttsReady = false;
     private boolean pageReady = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        tts = new TextToSpeech(this, status -> {
+            if (status == TextToSpeech.SUCCESS) {
+                int result = tts.setLanguage(new Locale("vi", "VN"));
+                ttsReady = result != TextToSpeech.LANG_MISSING_DATA
+                        && result != TextToSpeech.LANG_NOT_SUPPORTED;
+                if (ttsReady) {
+                    tts.setSpeechRate(0.88f);
+                    tts.setPitch(1.08f);
+                }
+            }
+        });
         webView = new WebView(this);
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
@@ -97,6 +111,11 @@ public class MainActivity extends Activity implements LocationListener {
         else super.onBackPressed();
     }
 
+    @Override protected void onDestroy() {
+        if (tts != null) { tts.stop(); tts.shutdown(); }
+        super.onDestroy();
+    }
+
     private class AndroidBridge {
         @JavascriptInterface public void vibrate() {
             runOnUiThread(() -> {
@@ -107,6 +126,21 @@ public class MainActivity extends Activity implements LocationListener {
                     else vibrator.vibrate(500);
                 }
             });
+        }
+
+        @JavascriptInterface public void speak(String text) {
+            if (text == null || text.trim().isEmpty()) return;
+            runOnUiThread(() -> {
+                if (ttsReady && tts != null) {
+                    tts.setSpeechRate(0.88f);
+                    tts.setPitch(1.08f);
+                    tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "hieunav-guidance");
+                }
+            });
+        }
+
+        @JavascriptInterface public boolean isVietnameseVoiceReady() {
+            return ttsReady;
         }
     }
 }
