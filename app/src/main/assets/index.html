@@ -6,69 +6,203 @@
 <title>HieuNav</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:Arial,sans-serif;background:#101820;color:#fff}
-#map{position:absolute;inset:0;z-index:1}.top{position:absolute;z-index:500;top:12px;left:12px;right:12px;display:flex;gap:8px}
-input{min-width:0;flex:1;padding:14px;border:0;border-radius:12px;background:#fff;color:#111;font-size:16px;box-shadow:0 2px 10px #0005}
-button{border:0;border-radius:12px;padding:12px 15px;background:#1479e8;color:white;font-weight:bold;font-size:15px}
-.panel{position:absolute;z-index:500;left:12px;right:12px;bottom:14px;background:#101820f2;border:1px solid #45515c;border-radius:18px;padding:14px;box-shadow:0 3px 18px #0007}
-.row{display:flex;align-items:center;justify-content:space-between;gap:10px}.speed{font-size:48px;font-weight:bold;line-height:1}.unit{font-size:13px;color:#aebdca}.muted{color:#aebdca;font-size:13px;margin-top:6px}.limit{width:68px;height:68px;border:5px solid #e53935;border-radius:50%;background:white;color:#111;display:grid;place-items:center;font-size:25px;font-weight:bold}
-.actions{display:flex;gap:8px;margin-top:12px}.actions button{flex:1}.warn{background:#9e1b1b}.status{font-size:13px;color:#b7c8d7;margin-top:8px}
-.leaflet-control-attribution{font-size:10px!important}
+:root{--blue:#1677e8;--navy:#101923;--panel:#111c27;--muted:#aebdca;--red:#c92d32;--line:#344351}
+*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:Roboto,Arial,sans-serif;background:#101820;color:#fff;overflow:hidden}
+#map{position:absolute;inset:0;z-index:1}.top{position:absolute;z-index:500;top:12px;left:12px;right:12px;display:flex;gap:8px;align-items:center}
+input{min-width:0;flex:1;padding:15px;border:0;border-radius:14px;background:#fff;color:#111;font-size:16px;box-shadow:0 2px 10px #0005}
+button{border:0;border-radius:13px;padding:12px 14px;background:var(--blue);color:white;font-weight:700;font-size:14px}
+#goSearch{min-width:58px}
+#turnBanner{display:none;position:absolute;z-index:510;top:78px;left:12px;right:12px;background:#102b48f5;border:1px solid #4388ce;border-radius:15px;padding:12px 14px;box-shadow:0 3px 16px #0007}
+#turnMain{font-size:17px;font-weight:700}#turnSub{font-size:13px;color:#d5e6f6;margin-top:4px}
+#bottom{position:absolute;z-index:500;left:10px;right:10px;bottom:12px;display:flex;flex-direction:column;gap:9px}
+.panel{background:#101923f2;border:1px solid #45515c;border-radius:17px;padding:12px 13px;box-shadow:0 3px 18px #0008;backdrop-filter:blur(8px)}
+.metrics{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;align-items:center}
+.metricLabel{font-size:11px;color:var(--muted);letter-spacing:.2px}.metricValue{font-size:30px;font-weight:800;line-height:1.2}.metricValue.small{font-size:21px}.metricUnit{font-size:12px;color:#c0ced9}
+.limitCircle{width:58px;height:58px;border:5px solid #e53935;border-radius:50%;background:white;color:#111;display:grid;place-items:center;font-size:23px;font-weight:800;margin:3px auto}
+#limitMetric{text-align:center}
+#navActions{display:flex;gap:8px;margin-top:10px}#navActions button{flex:1;min-height:42px}
+.secondary{background:#354656}.danger{background:#9e1b1b}.success{background:#137b51}
+#status{font-size:12px;color:#c1cfda;margin-top:8px;line-height:1.35}
+.dock{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;background:#0d151eeF;border:1px solid #42505e;border-radius:16px;padding:7px;box-shadow:0 3px 16px #0008}
+.dock button{background:transparent;color:#b7c7d5;padding:8px 3px 6px;min-height:52px;font-size:11px;font-weight:600;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+.dock button .ico{font-size:21px;line-height:22px}.dock button.active{background:#17395d;color:#fff;border-radius:11px}
+.sheet{display:none;position:absolute;z-index:520;left:10px;right:10px;bottom:83px;max-height:48vh;overflow:auto;background:#101923f7;border:1px solid #526170;border-radius:16px;padding:14px;box-shadow:0 4px 20px #0009}
+.sheetHead{display:flex;align-items:center;justify-content:space-between;font-size:17px;font-weight:800;margin-bottom:10px}
+.close{background:#354656;padding:7px 11px}.item{padding:9px 0;border-top:1px solid #354351;font-size:13px;line-height:1.4}.item strong{display:block;font-size:14px}.subtle{color:#b6c5d1;font-size:12px}
+.switchrow{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid #354351;font-size:14px}
+input[type=checkbox]{width:20px;height:20px;flex:0}
+.leaflet-control-attribution{font-size:9px!important}
+@media(max-height:650px){#bottom{bottom:6px;gap:6px}.panel{padding:9px 11px}.metricValue{font-size:25px}.dock{padding:4px}.dock button{min-height:43px}.sheet{max-height:40vh;bottom:66px}}
 </style>
 </head>
 <body>
 <div id="map"></div>
-<div class="top"><input id="destination" placeholder="Nhập địa điểm cần đến"><button onclick="searchRoute()">ĐI</button></div>
-<div class="panel">
- <div class="row">
-  <div><div class="unit">TỐC ĐỘ HIỆN TẠI</div><div class="speed" id="speed">--</div><div class="unit">km/h · GPS</div></div>
-  <div style="text-align:center"><div class="unit">GIỚI HẠN CÀI ĐẶT</div><div class="limit" id="limitBadge">80</div><div class="unit">km/h</div></div>
-  <div><div class="unit">QUÃNG ĐƯỜNG</div><strong id="distance">--</strong><div class="unit">đến điểm đích</div></div>
+<div class="top"><input id="destination" placeholder="Nhập địa điểm cần đến"><button id="goSearch" onclick="searchRoute()">TÌM</button></div>
+<div id="turnBanner"><div id="turnMain">Sẵn sàng dẫn đường</div><div id="turnSub">Tìm điểm đến để tính lộ trình</div></div>
+<div id="sheet" class="sheet"></div>
+<div id="bottom">
+ <div class="panel">
+  <div class="metrics">
+   <div><div class="metricLabel">TỐC ĐỘ HIỆN TẠI</div><div class="metricValue" id="speed">--</div><div class="metricUnit">km/h · GPS</div></div>
+   <div id="limitMetric"><div class="metricLabel">GIỚI HẠN ĐANG ĐẶT</div><div class="limitCircle" id="limitBadge">60</div><div class="metricUnit">km/h</div></div>
+   <div style="text-align:right"><div class="metricLabel">ĐẾN ĐÍCH</div><div class="metricValue small" id="eta">--</div><div class="metricUnit" id="distance">-- km</div></div>
+  </div>
+  <div id="navActions">
+   <button class="success" id="startNav" onclick="startNavigation()" disabled>DẪN ĐƯỜNG</button>
+   <button class="secondary" onclick="centerOnMe()">VỊ TRÍ CỦA TÔI</button>
+   <button class="danger" onclick="clearRoute()">XÓA TUYẾN</button>
+  </div>
+  <div class="status" id="status">Đang tải bản đồ… Cho phép HieuNav truy cập vị trí để bắt đầu.</div>
  </div>
- <div class="actions"><button onclick="centerOnMe()">VỊ TRÍ CỦA TÔI</button><button onclick="setLimit()">ĐỔI GIỚI HẠN</button><button class="warn" onclick="clearRoute()">XÓA TUYẾN</button></div>
- <div class="status" id="status">Đang tải bản đồ… Cho phép HieuNav truy cập vị trí để bắt đầu.</div>
+ <div class="dock">
+  <button id="tabMap" class="active" onclick="showTab('map')"><span class="ico">⌖</span>BẢN ĐỒ</button>
+  <button id="tabRoute" onclick="showTab('route')"><span class="ico">➤</span>LỘ TRÌNH</button>
+  <button id="tabAlerts" onclick="showTab('alerts')"><span class="ico">⚠</span>BIỂN BÁO</button>
+  <button id="tabSettings" onclick="showTab('settings')"><span class="ico">⚙</span>CÀI ĐẶT</button>
+ </div>
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-let map,me=null,meMarker=null,routeLine=null,destinationMarker=null,limit=80,alertAt=0,lastSpeedAlert=0;
-function status(t){document.getElementById('status').textContent=t}
+let map,me=null,meMarker=null,routeLine=null,destinationMarker=null,limit=60,lastSpeedAlert=0;
+let routeData=null,steps=[],stepIndex=0,navigating=false,destination=null,alertFeatures=[],alertTimer=null;
+const prefs={speed:true,residential:true,noStop:true,noPark:true,trafficSigns:true};
+const $=id=>document.getElementById(id);
+function status(t){$('status').textContent=t}
 function init(){
  map=L.map('map',{zoomControl:false}).setView([16.0,108.0],6);
  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
  status('Bản đồ đã tải. Đang chờ tín hiệu GPS.');
 }
 function hieuNavUpdateLocation(lat,lon,speed){
- me=[lat,lon]; document.getElementById('speed').textContent=Math.round(speed);
+ me=[lat,lon];const s=Math.max(0,Math.round(speed));$('speed').textContent=s;
  if(!meMarker){meMarker=L.circleMarker(me,{radius:9,color:'#fff',weight:3,fillColor:'#1479e8',fillOpacity:1}).addTo(map);map.setView(me,16)}
  else meMarker.setLatLng(me);
- status('GPS hoạt động · '+lat.toFixed(5)+', '+lon.toFixed(5));
- if(speed>limit && Date.now()-lastSpeedAlert>12000){lastSpeedAlert=Date.now();status('CẢNH BÁO: Bạn đang vượt giới hạn đã cài đặt!');try{HieuNavAndroid.vibrate()}catch(e){}}
+ if(prefs.speed&&s>limit&&Date.now()-lastSpeedAlert>12000){lastSpeedAlert=Date.now();status('CẢNH BÁO: Tốc độ đang cao hơn mức bạn cài đặt.');try{HieuNavAndroid.vibrate()}catch(e){}}
+ if(navigating&&steps.length)updateNavigationProgress();
+ if(!alertTimer)loadNearbyAlerts();
 }
-function centerOnMe(){if(me)map.setView(me,17);else status('Chưa có vị trí GPS. Hãy bật định vị của điện thoại.')}
-function setLimit(){let n=prompt('Nhập giới hạn tốc độ (km/h):',limit);if(n!==null&&Number(n)>0&&Number(n)<201){limit=Number(n);document.getElementById('limitBadge').textContent=limit}}
+function centerOnMe(){if(me)map.setView(me,17);else status('Chưa có vị trí GPS. Hãy bật định vị điện thoại.')}
+function setLimit(){let n=prompt('Nhập ngưỡng cảnh báo tốc độ (km/h):',limit);if(n!==null&&Number(n)>0&&Number(n)<201){limit=Number(n);$('limitBadge').textContent=limit}}
+function fmtTime(sec){let min=Math.max(1,Math.round(sec/60));if(min<60)return min+' phút';let h=Math.floor(min/60),m=min%60;return h+' giờ'+(m?' '+m+' phút':'')}
+function maneuverText(m,road){
+ const type=m?.type||'continue',mod=m?.modifier||'';
+ const dirs={left:'rẽ trái',right:'rẽ phải',slight_left:'chếch trái',slight_right:'chếch phải',sharp_left:'rẽ gấp trái',sharp_right:'rẽ gấp phải',uturn:'quay đầu',straight:'đi thẳng'};
+ let t=type==='depart'?'Bắt đầu di chuyển':type==='arrive'?'Đã đến điểm đến':type==='roundabout'?'Đi vào vòng xuyến':type==='rotary'?'Đi vào vòng xuyến':type==='merge'?'Nhập vào đường':type==='fork'?'Tại ngã rẽ':type==='on ramp'?'Đi vào đường dẫn':type==='off ramp'?'Ra khỏi đường dẫn':type==='end of road'?'Cuối đường,':type==='new name'?'Tiếp tục đi':type==='continue'?'Tiếp tục đi':type;
+ if(mod&&dirs[mod])t+=' '+dirs[mod];
+ if(road)t+=' vào '+road;
+ return t;
+}
+function setTurnBanner(main,sub){$('turnBanner').style.display='block';$('turnMain').textContent=main;$('turnSub').textContent=sub||''}
 async function searchRoute(){
- let q=document.getElementById('destination').value.trim();if(!q)return;
+ const q=$('destination').value.trim();if(!q)return;
+ if(!me){status('Đang chờ GPS. Bật định vị và đợi vị trí xuất hiện rồi tìm lại.');return}
  status('Đang tìm địa điểm…');
  try{
-  let g=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q='+encodeURIComponent(q));
-  let a=await g.json();if(!a.length)throw new Error('Không tìm thấy địa điểm');
-  let dest=[Number(a[0].lat),Number(a[0].lon)];
+  const g=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q='+encodeURIComponent(q));
+  const a=await g.json();if(!a.length)throw new Error('Không tìm thấy địa điểm');
+  destination=[Number(a[0].lat),Number(a[0].lon)];
   if(destinationMarker)map.removeLayer(destinationMarker);
-  destinationMarker=L.marker(dest).addTo(map).bindPopup(a[0].display_name).openPopup();
-  if(me){
-   status('Đang tính tuyến đường…');
-   let r=await fetch('https://router.project-osrm.org/route/v1/driving/'+me[1]+','+me[0]+';'+dest[1]+','+dest[0]+'?overview=full&geometries=geojson');
-   let data=await r.json();if(!data.routes||!data.routes.length)throw new Error('Không tính được tuyến đường');
-   if(routeLine)map.removeLayer(routeLine);
-   routeLine=L.geoJSON(data.routes[0].geometry,{style:{color:'#1479e8',weight:6,opacity:.9}}).addTo(map);
-   document.getElementById('distance').textContent=(data.routes[0].distance/1000).toFixed(1)+' km';
-   map.fitBounds(routeLine.getBounds(),{padding:[35,35]});
-   status('Đã vẽ tuyến tham khảo. Kiểm tra biển báo thực tế và quy định giao thông.');
-  }else{map.setView(dest,14);status('Đã tìm thấy điểm đến. Đang chờ GPS để tính tuyến.')}
- }catch(e){status('Không thể tìm/tính tuyến: '+e.message)}
+  destinationMarker=L.marker(destination).addTo(map).bindPopup(a[0].display_name).openPopup();
+  status('Đang tính lộ trình và thời gian dự kiến…');
+  const url='https://router.project-osrm.org/route/v1/driving/'+me[1]+','+me[0]+';'+destination[1]+','+destination[0]+'?overview=full&geometries=geojson&steps=true';
+  const r=await fetch(url);const data=await r.json();if(data.code!=='Ok'||!data.routes?.length)throw new Error('Không tìm được lộ trình phù hợp');
+  routeData=data.routes[0];steps=routeData.legs.flatMap(l=>l.steps||[]);stepIndex=0;navigating=false;
+  if(routeLine)map.removeLayer(routeLine);
+  routeLine=L.geoJSON(routeData.geometry,{style:{color:'#1479e8',weight:6,opacity:.95}}).addTo(map);
+  $('distance').textContent=(routeData.distance/1000).toFixed(1)+' km';
+  $('eta').textContent=fmtTime(routeData.duration);
+  $('startNav').disabled=false;$('startNav').textContent='DẪN ĐƯỜNG';
+  map.fitBounds(routeLine.getBounds(),{padding:[35,130]});
+  setTurnBanner('Đã có lộ trình',maneuverText(steps[0]?.maneuver,steps[0]?.name)+' · '+(steps[0]?.distance/1000||0).toFixed(1)+' km');
+  status('Đã tính tuyến tham khảo. Nhấn DẪN ĐƯỜNG để bắt đầu chỉ dẫn từng chặng.');
+  renderRouteSheet();
+ }catch(e){status('Không thể tìm/tính lộ trình: '+e.message)}
 }
-function clearRoute(){if(routeLine)map.removeLayer(routeLine);if(destinationMarker)map.removeLayer(destinationMarker);routeLine=null;destinationMarker=null;document.getElementById('distance').textContent='--';status('Đã xóa tuyến đường')}
-window.hieuNavUpdateLocation= hieuNavUpdateLocation;
+function startNavigation(){
+ if(!routeData||!steps.length)return;
+ navigating=true;stepIndex=0;$('startNav').textContent='ĐANG DẪN ĐƯỜNG';$('startNav').className='secondary';
+ updateNavigationProgress(true);status('Đang dẫn đường thử nghiệm. Hãy tuân thủ biển báo và quan sát đường.');
+}
+function dist(a,b){const R=6371000,rad=x=>x*Math.PI/180;const dLat=rad(b[0]-a[0]),dLon=rad(b[1]-a[1]);const x=Math.sin(dLat/2)**2+Math.cos(rad(a[0]))*Math.cos(rad(b[0]))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
+function updateNavigationProgress(force=false){
+ if(!me||!steps.length||!routeData)return;
+ let best=stepIndex,bestD=Infinity;
+ for(let i=Math.max(0,stepIndex-1);i<Math.min(steps.length,stepIndex+4);i++){
+  const loc=steps[i].maneuver?.location;if(!loc)continue;
+  const d=dist(me,[loc[1],loc[0]]);if(d<bestD){bestD=d;best=i}
+ }
+ if(force||bestD<45){stepIndex=Math.max(stepIndex,best)}
+ const step=steps[Math.min(stepIndex,steps.length-1)],loc=step?.maneuver?.location;
+ const d=loc?dist(me,[loc[1],loc[0]]):0;
+ if(destination&&dist(me,destination)<45){navigating=false;setTurnBanner('ĐÃ ĐẾN NƠI','Bạn đã đến gần điểm đến.');$('startNav').textContent='ĐÃ ĐẾN';status('Đã đến điểm đến.');return}
+ const next=steps[Math.min(stepIndex+1,steps.length-1)];
+ setTurnBanner(maneuverText(step?.maneuver,step?.name), 'Còn khoảng '+Math.max(0,Math.round(d))+' m đến thao tác tiếp theo'+(next?' · Sau đó '+maneuverText(next.maneuver,next.name):''));
+ const remain=steps.slice(stepIndex).reduce((s,x)=>s+(x.distance||0),0);
+ $('distance').textContent=(remain/1000).toFixed(1)+' km';
+ $('eta').textContent=fmtTime(routeData.duration*(remain/Math.max(1,routeData.distance)));
+}
+function renderRouteSheet(){
+ let html='<div class="sheetHead">Lộ trình <button class="close" onclick="closeSheet()">Đóng</button></div>';
+ if(!steps.length){html+='<div class="subtle">Chưa có lộ trình. Hãy tìm điểm đến trước.</div>'}
+ else {html+='<div class="subtle">Tổng '+(routeData.distance/1000).toFixed(1)+' km · khoảng '+fmtTime(routeData.duration)+'</div>';
+ steps.forEach((s,i)=>{html+='<div class="item"><strong>'+(i+1)+'. '+maneuverText(s.maneuver,s.name)+'</strong><span class="subtle">'+(s.distance>=1000?(s.distance/1000).toFixed(1)+' km':Math.round(s.distance)+' m')+' · '+fmtTime(s.duration)+'</span></div>'})}
+ $('sheet').innerHTML=html;
+}
+function showTab(tab){
+ ['Map','Route','Alerts','Settings'].forEach(x=>$('tab'+x).classList.toggle('active',x.toLowerCase()===tab));
+ if(tab==='map'){closeSheet();return}
+ $('sheet').style.display='block';
+ if(tab==='route')renderRouteSheet();
+ if(tab==='alerts')renderAlertsSheet();
+ if(tab==='settings')renderSettingsSheet();
+}
+function closeSheet(){$('sheet').style.display='none';$('tabMap').classList.add('active');['tabRoute','tabAlerts','tabSettings'].forEach(id=>$(id).classList.remove('active'))}
+async function loadNearbyAlerts(){
+ if(!me)return;alertTimer=setTimeout(()=>{alertTimer=null},60000);
+ const [lat,lon]=me;
+ const query='[out:json][timeout:12];(nwr(around:700,'+lat+','+lon+')[~"^(traffic_sign|maxspeed|zone:traffic|parking:condition|parking:lane|restriction:conditional)$"~"."];);out center tags;';
+ try{
+  const res=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(query)});
+  if(!res.ok)throw new Error('Dữ liệu biển báo tạm thời không truy cập được');
+  const data=await res.json();alertFeatures=(data.elements||[]).map(e=>({tags:e.tags||{},lat:e.lat??e.center?.lat,lon:e.lon??e.center?.lon})).filter(e=>e.lat&&e.lon);
+  if($('sheet').style.display==='block'&&$('tabAlerts').classList.contains('active'))renderAlertsSheet();
+ }catch(e){alertFeatures=[];console.log(e)}
+}
+function classifyAlert(tags){
+ const all=Object.entries(tags).map(([k,v])=>k+'='+v).join(' ').toLowerCase();
+ const out=[];
+ if(tags.maxspeed)out.push({title:'Giới hạn tốc độ: '+tags.maxspeed,detail:'Dữ liệu OpenStreetMap'});
+ if(tags['zone:traffic']||/city_limit|builtup|urban/.test(all))out.push({title:'Khu vực giao thông / khu dân cư',detail:tags['zone:traffic']||tags.traffic_sign||'Cần đối chiếu biển thực tế'});
+ if(/no_stopping|no stopping/.test(all)||tags['parking:condition']?.includes('no_stopping'))out.push({title:'Có dữ liệu cấm dừng',detail:tags['parking:condition']||tags.traffic_sign||'Kiểm tra phạm vi và thời gian trên biển'});
+ if(/no_parking|no parking/.test(all)||tags['parking:condition']?.includes('no_parking'))out.push({title:'Có dữ liệu cấm đỗ',detail:tags['parking:condition']||tags.traffic_sign||'Kiểm tra phạm vi và thời gian trên biển'});
+ if(tags.traffic_sign)out.push({title:'Biển báo: '+tags.traffic_sign,detail:'Mã biển theo dữ liệu OpenStreetMap'});
+ if(tags['restriction:conditional'])out.push({title:'Hạn chế theo thời gian',detail:tags['restriction:conditional']});
+ return out;
+}
+function renderAlertsSheet(){
+ let html='<div class="sheetHead">Biển báo & hạn chế <button class="close" onclick="closeSheet()">Đóng</button></div><div class="subtle">Dữ liệu cộng đồng OpenStreetMap trong bán kính khoảng 700 m quanh vị trí GPS.</div>';
+ let list=[];alertFeatures.forEach(f=>classifyAlert(f.tags).forEach(a=>list.push({...a,d:dist(me,[f.lat,f.lon])})));
+ list.sort((a,b)=>a.d-b.d);
+ if(!list.length)html+='<div class="item">Chưa tìm thấy dữ liệu biển báo được gắn thẻ gần đây. Không có dữ liệu không đồng nghĩa không có biển báo.</div>';
+ else list.slice(0,12).forEach(a=>html+='<div class="item"><strong>'+escapeHtml(a.title)+'</strong><span class="subtle">'+escapeHtml(a.detail)+' · khoảng '+Math.round(a.d)+' m</span></div>');
+ html+='<div class="item subtle">Lưu ý: dữ liệu có thể thiếu, cũ hoặc chưa thể hiện đúng hiệu lực theo giờ/ngày. Biển báo và quy định thực tế tại hiện trường luôn được ưu tiên.</div><button onclick="loadNearbyAlerts();status(\'Đang làm mới dữ liệu biển báo…\')">LÀM MỚI DỮ LIỆU</button>';
+ $('sheet').innerHTML=html;
+}
+function renderSettingsSheet(){
+ let labels={speed:'Cảnh báo khi vượt ngưỡng tốc độ đã đặt',residential:'Cảnh báo khu dân cư (khi có dữ liệu)',noStop:'Cảnh báo cấm dừng',noPark:'Cảnh báo cấm đỗ',trafficSigns:'Hiển thị dữ liệu biển báo'};
+ let html='<div class="sheetHead">Cài đặt cảnh báo <button class="close" onclick="closeSheet()">Đóng</button></div><div class="item subtle">Có thể bật/tắt từng loại cảnh báo. Dữ liệu biển báo hiện lấy từ OpenStreetMap, chưa phải cơ sở dữ liệu pháp lý đầy đủ.</div>';
+ Object.keys(prefs).forEach(k=>html+='<label class="switchrow">'+labels[k]+'<input type="checkbox" '+(prefs[k]?'checked':'')+' onchange="prefs.'+k+'=this.checked"></label>');
+ html+='<div class="switchrow">Ngưỡng cảnh báo tốc độ <strong>'+limit+' km/h <button onclick="setLimit()">ĐỔI</button></strong></div>';
+ $('sheet').innerHTML=html;
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function clearRoute(){
+ if(routeLine)map.removeLayer(routeLine);if(destinationMarker)map.removeLayer(destinationMarker);
+ routeLine=null;destinationMarker=null;destination=null;routeData=null;steps=[];navigating=false;stepIndex=0;
+ $('distance').textContent='-- km';$('eta').textContent='--';$('startNav').disabled=true;$('startNav').textContent='DẪN ĐƯỜNG';$('startNav').className='success';
+ $('turnBanner').style.display='none';$('destination').value='';status('Đã xóa lộ trình');
+}
+window.hieuNavUpdateLocation=hieuNavUpdateLocation;
 window.addEventListener('load',init);
 </script>
 </body></html>
