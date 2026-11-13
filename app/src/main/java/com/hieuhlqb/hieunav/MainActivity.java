@@ -171,7 +171,7 @@ public class MainActivity extends Activity implements LocationListener {
                     }
                     response = body.toString();
                 } catch (Exception ex) {
-                    response = "{\\"status\\":\\"HIEUNAV_NETWORK_ERROR\\",\\"error_message\\":";
+                    response = "{\"status\":\"HIEUNAV_NETWORK_ERROR\",\"error_message\":"
                             + org.json.JSONObject.quote(ex.getMessage() == null ? "Network error" : ex.getMessage()) + "}";
                 } finally {
                     if (connection != null) connection.disconnect();
