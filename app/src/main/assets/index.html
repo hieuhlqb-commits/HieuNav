@@ -210,15 +210,25 @@ function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;',
 function geoPoint(coord){
  return {type:'Feature',geometry:{type:'Point',coordinates:[coord[1],coord[0]]},properties:{}};
 }
-function set3DDrivingCamera(position,bearing,speed=45,duration=420){
+let last3DCameraTarget=null,last3DCameraMoveAt=0;
+function set3DDrivingCamera(position,bearing,speed=45,duration=900){
  if(!map3dReady||!map3d||!position)return;
- const kmh=Math.max(0,Number(speed)||0);
- const zoom=kmh>=100?18.0:kmh>=80?18.25:kmh>=60?18.45:18.65;
- const pitch=kmh>=90?72:kmh>=60?74:75;
+ const now=Date.now(),kmh=Math.max(0,Number(speed)||0);
+ const zoom=kmh>=110?18.0:kmh>=85?18.25:kmh>=60?18.5:18.75;
+ const pitch=kmh>=100?70:kmh>=65?73:75;
  const target=preferredRouteBearing(position,bearing);
- const h=map3d.getContainer()?.clientHeight||window.innerHeight||800;
- map3d.easeTo({center:[position[1],position[0]],zoom,pitch,bearing:Number.isFinite(target)?target:map3d.getBearing(),
-  padding:{top:0,bottom:Math.round(h*.27)},duration,essential:true});
+ const center=[position[1],position[0]],h=map3d.getContainer()?.clientHeight||window.innerHeight||800;
+ let move= !last3DCameraTarget;
+ if(last3DCameraTarget){
+  const moved=dist([last3DCameraTarget[1],last3DCameraTarget[0]],position);
+  const angle=Math.abs(((target-map3d.getBearing()+540)%360)-180);
+  move=moved>=7||angle>=7||now-last3DCameraMoveAt>=1600;
+ }
+ if(!move)return;
+ last3DCameraTarget=center;last3DCameraMoveAt=now;
+ map3d.easeTo({center,zoom,pitch,bearing:Number.isFinite(target)?target:map3d.getBearing(),
+  padding:{top:Math.round(h*.04),bottom:Math.round(h*.30)},duration:Math.max(700,duration||900),
+  easing:t=>t,essential:true});
 }
 function ensure3DVehicle(position){
  if(!map3dReady||!position||!window.maplibregl)return null;
@@ -239,10 +249,10 @@ function update3DVehicle(){
  if(!map3dReady||!me)return;
  if(!map3dIncidentMarkers.length&&incidents.length)draw3DIncidentMarkers();
  ensure3DVehicle(me);if(Number.isFinite(gpsMeta.trackHeading))map3dVehicleMarker?.setRotation(gpsMeta.trackHeading);else if(Number.isFinite(filteredHeading))map3dVehicleMarker?.setRotation(filteredHeading);
- if(is3DMode&&followVehicle&&Date.now()-lastCameraCenterAt>650){
+ if(is3DMode&&followVehicle&&Date.now()-lastCameraCenterAt>950){
   lastCameraCenterAt=Date.now();
   const bearing=preferredRouteBearing(me,Number.isFinite(gpsMeta.trackHeading)?gpsMeta.trackHeading:(filteredHeading===null?map3d.getBearing():filteredHeading));
-  set3DDrivingCamera(me,bearing,smoothedSpeedKmh||45,550);
+  set3DDrivingCamera(me,bearing,smoothedSpeedKmh||45,1000);
  }
 }
 function update3DRoute(){
@@ -255,13 +265,15 @@ function update3DRoute(){
 }
 function init3DMap(){
  if(map3d||!window.maplibregl)return;
+ try{if(typeof maplibregl.setMaxParallelImageRequests==='function')maplibregl.setMaxParallelImageRequests(16);}catch(e){}
  try{
   map3d=new maplibregl.Map({
    container:'map3d',
    style:'https://tiles.openfreemap.org/styles/liberty',
    center:me?[me[1],me[0]]:[106.7,10.8],
-   zoom:me?17.8:5,pitch:68,bearing:0,
-   maxPitch:75, attributionControl:true
+   zoom:me?18.2:5,pitch:72,bearing:0,
+   maxPitch:78, antialias:true, maxTileCacheSize:512, maxTileCacheZoomLevels:6,
+   fadeDuration:0, attributionControl:true
   });
   map3d.addControl(new maplibregl.NavigationControl({showCompass:true,showZoom:true}),'top-right');
   map3d.on('load',()=>{
@@ -464,28 +476,32 @@ function routeBearingAt(pos){
  }
  return best<100?bearing:null;
 }
-function routeBearingLookahead(pos,lookaheadMeters=120){
+function routeBearingLookahead(pos,lookaheadMeters=260){
  if(!routeCoords||routeCoords.length<2||!pos)return null;
- let best=Infinity,bestIndex=0,bestT=0;
+ let best=Infinity,bestIndex=1,bestT=0,bestPoint=null;
  for(let i=1;i<routeCoords.length;i++){
   const a=[routeCoords[i-1][1],routeCoords[i-1][0]],b=[routeCoords[i][1],routeCoords[i][0]];
-  const d=pointSegmentDistance(pos,a,b);
-  if(d<best){best=d;bestIndex=i;bestT=0;}
+  const latScale=111320,lonScale=111320*Math.cos(pos[0]*Math.PI/180);
+  const ax=(a[1]-pos[1])*lonScale,ay=(a[0]-pos[0])*latScale;
+  const bx=(b[1]-pos[1])*lonScale,by=(b[0]-pos[0])*latScale;
+  const dx=bx-ax,dy=by-ay,den=dx*dx+dy*dy;
+  const t=den?Math.max(0,Math.min(1,-(ax*dx+ay*dy)/den)):0;
+  const px=ax+t*dx,py=ay+t*dy,d=Math.hypot(px,py);
+  if(d<best){best=d;bestIndex=i;bestT=t;bestPoint=[pos[0]+py/latScale,pos[1]+px/lonScale];}
  }
- if(best>120)return null;
- const start=routeCoords[bestIndex-1],end=routeCoords[bestIndex];
- let walked=0,prev=[start[1],start[0]],target=null;
- for(let i=bestIndex;i<routeCoords.length;i++){
-  const cur=[routeCoords[i][1],routeCoords[i][0]];
-  const seg=dist(prev,cur);
-  if(walked+seg>=lookaheadMeters){
-   const t=(lookaheadMeters-walked)/Math.max(1,seg);
-   target=[prev[0]+(cur[0]-prev[0])*t,prev[1]+(cur[1]-prev[1])*t];break;
-  }
-  walked+=seg;prev=cur;
+ if(best>100||!bestPoint)return null;
+ let walked=0,prev=bestPoint,target=null;
+ const first=[routeCoords[bestIndex][1],routeCoords[bestIndex][0]];
+ let seg=dist(prev,first);
+ if(seg>0){if(seg>=lookaheadMeters){const t=lookaheadMeters/seg;target=[prev[0]+(first[0]-prev[0])*t,prev[1]+(first[1]-prev[1])*t];}
+  else{walked+=seg;prev=first;}}
+ for(let i=bestIndex+1;!target&&i<routeCoords.length;i++){
+  const cur=[routeCoords[i][1],routeCoords[i][0]],length=dist(prev,cur);
+  if(walked+length>=lookaheadMeters){const t=(lookaheadMeters-walked)/Math.max(1,length);target=[prev[0]+(cur[0]-prev[0])*t,prev[1]+(cur[1]-prev[1])*t];break;}
+  walked+=length;prev=cur;
  }
  if(!target)target=[routeCoords[routeCoords.length-1][1],routeCoords[routeCoords.length-1][0]];
- return bearingBetween(pos,target);
+ return bearingBetween(bestPoint,target);
 }
 function preferredRouteBearing(pos,fallback){
  const look=routeBearingLookahead(pos,130);
@@ -513,7 +529,7 @@ function updateVehicleHeading(){
   if(Math.abs(delta)>2)map.setBearing(map.getBearing()+Math.max(-10,Math.min(10,delta*.35)));
  }
  const glyph=document.getElementById('vehicleGlyph');if(glyph)glyph.style.transform='rotate(0deg)';
- if(is3DMode&&map3dReady&&followVehicle&&me)set3DDrivingCamera(me,h,smoothedSpeedKmh||45,500);
+ if(is3DMode&&map3dReady&&followVehicle&&me&&Date.now()-last3DCameraAt>900){last3DCameraAt=Date.now();set3DDrivingCamera(me,h,smoothedSpeedKmh||45,950);}
 }
 function onDeviceOrientation(ev){
  let h=null;
@@ -904,16 +920,25 @@ async function addMapPointAsStop(){
 }
 function maneuverText(s){
  const m=s?.maneuver||{},t=m.type||'continue',d=m.modifier||'';
- if(d==='uturn'||t==='uturn')return 'Quay đầu';
- const direction=({left:'trái',right:'phải','slight left':'trái','slight right':'phải','sharp left':'trái','sharp right':'phải',straight:'đi thẳng'})[d];
- if(t==='roundabout')return 'Vào vòng xuyến';
- if(t==='merge'||t==='on_ramp')return 'Nhập làn';
- if(t==='off_ramp')return 'Ra khỏi đường';
- if(t==='fork')return 'Chọn nhánh '+(direction||'đường');
  if(t==='arrive')return 'Đến nơi';
  if(t==='depart')return 'Bắt đầu';
- if(t==='turn'||t==='end_of_road')return direction?'Rẽ '+direction:'Đi tiếp';
- return direction==='đi thẳng'?'Đi thẳng':direction?'Rẽ '+direction:'Đi thẳng';
+ if(t==='roundabout' || t==='rotary')return 'Vào vòng xuyến';
+ if(t==='merge'||t==='on_ramp')return 'Nhập làn';
+ if(t==='off_ramp')return 'Ra khỏi đường';
+ if(t==='fork')return 'Chọn nhánh '+(d.includes('left')?'trái':d.includes('right')?'phải':'phù hợp');
+ if(Number.isFinite(m.bearing_before)&&Number.isFinite(m.bearing_after)){
+  const delta=((m.bearing_after-m.bearing_before+540)%360)-180;
+  if(Math.abs(delta)>=150)return 'Quay đầu';
+  if(delta>=28)return 'Rẽ phải';
+  if(delta<=-28)return 'Rẽ trái';
+  return 'Đi thẳng';
+ }
+ if(t==='uturn'||d==='uturn')return 'Quay đầu';
+ if(d.includes('left'))return 'Rẽ trái';
+ if(d.includes('right'))return 'Rẽ phải';
+ if(d==='straight'||t==='continue'||t==='new name')return 'Đi thẳng';
+ if(t==='turn'||t==='end_of_road')return 'Đi tiếp';
+ return 'Đi thẳng';
 }
 function startNavigation(){
  if(!destination||!routeData||!steps.length){$('driveChoice').style.display='flex';return}
@@ -1086,9 +1111,7 @@ function refreshDuplicateConsensus(){
  if(changed)saveIncidents();
 }
 function adminIncidentAction(id,action){
- const pass=prompt('Mật khẩu quản trị viên (tạm thời):');
- if(pass===null)return;
- if(pass!=='4321'){alert('Mật khẩu không đúng.');return}
+ // Chế độ thử nghiệm cá nhân: bỏ mật khẩu quản trị; không dùng bản này cho triển khai công khai.
  const item=incidents.find(x=>String(x.id)===String(id));
  if(!item){alert('Không tìm thấy báo cáo.');return}
  if(action==='delete'){
@@ -1163,7 +1186,7 @@ function drawIncidentMarkers(){
  if(!map)return;refreshDuplicateConsensus();if(incidentLayer)map.removeLayer(incidentLayer);incidentLayer=L.layerGroup().addTo(map);
  saveIncidents();
  incidents.forEach(x=>{
-  const admin=`<br><button onclick="adminIncidentAction('${String(x.id)}','edit')">Quản trị: sửa</button> <button onclick="adminIncidentAction('${String(x.id)}','delete')">Quản trị: xóa</button>`;
+  const admin=`<br><button onclick="adminIncidentAction('${String(x.id)}','edit')">Sửa báo cáo</button> <button onclick="adminIncidentAction('${String(x.id)}','delete')">Quản trị: xóa</button>`;
   L.marker([x.lat,x.lon],{icon:incidentMarkerIcon(x)}).addTo(incidentLayer).bindPopup('<b>'+escapeHtml((x.kind==='residential_start'?'R.420':x.kind==='residential_end'?'R.421':(x.icon||'⚠️')))+' '+escapeHtml(x.type)+'</b><br>'+escapeHtml(x.note)+'<br>'+escapeHtml(x.status)+'<br>Giá trị: '+(x.speedLimit?x.speedLimit+' km/h':escapeHtml(x.type))+'<br>Trạng thái: '+(x.reportedValidity==='2'?'Đã hết hiệu lực':x.reportedValidity==='1'?'Đang khai báo hiệu lực':'Chưa rõ hiệu lực')+'<br>Hiệu lực: '+(x.startTime&&x.endTime?escapeHtml(x.startTime+'–'+x.endTime):'Cả ngày')+'<br>Phạm vi: '+(x.radiusMeters||35)+' m quanh điểm báo cáo<br>Phương tiện: '+(x.vehicleTypes?.length?escapeHtml(x.vehicleTypes.join(', ')):'Tất cả/chưa phân loại')+'<br>Số báo cáo trùng khớp: '+(x.confirmationCount||1)+admin);
  });
  draw3DIncidentMarkers();
@@ -1194,7 +1217,7 @@ function renderAlertsSheet(){
  let h='<div class="sheetHead">Báo cáo sự cố <button class="close" onclick="closeSheet()">Đóng</button></div><button class="success" style="width:100%;margin:5px 0 10px" onclick="reportIncident()">＋ BÁO CÁO SỰ CỐ TẠI VỊ TRÍ GPS</button><div class="subtle">Ai cũng có thể gửi báo cáo, không cần quyền quản trị. Năm báo cáo cùng loại trong bán kính 100 m, trong 24 giờ sẽ được đánh dấu có nhiều xác nhận. Dữ liệu hiện lưu trên điện thoại này.</div>';
  const active=incidents.filter(x=>x.expires>Date.now()).sort((a,b)=>b.created-a.created);
  if(!active.length)h+='<div class="item">Chưa có báo cáo sự cố.</div>';
- active.forEach(x=>h+='<div class="item"><strong>'+escapeHtml(x.icon||'⚠️')+' '+escapeHtml(x.type)+'</strong>'+escapeHtml(x.note)+'<br><span class="subtle">'+new Date(x.created).toLocaleString('vi-VN')+' · '+escapeHtml(x.status)+' · '+(x.confirmationCount||1)+' báo cáo trùng khớp</span><br><button class="secondary" onclick="map.setView(['+x.lat+','+x.lon+'],17)">XEM VỊ TRÍ</button> <button class="secondary" onclick="adminIncidentAction('+JSON.stringify(String(x.id))+',\'edit\')">SỬA (QUẢN TRỊ)</button> <button class="danger" onclick="adminIncidentAction('+JSON.stringify(String(x.id))+',\'delete\')">XÓA (QUẢN TRỊ)</button></div>');
+ active.forEach(x=>h+='<div class="item"><strong>'+escapeHtml(x.icon||'⚠️')+' '+escapeHtml(x.type)+'</strong>'+escapeHtml(x.note)+'<br><span class="subtle">'+new Date(x.created).toLocaleString('vi-VN')+' · '+escapeHtml(x.status)+' · '+(x.confirmationCount||1)+' báo cáo trùng khớp</span><br><button class="secondary" onclick="map.setView(['+x.lat+','+x.lon+'],17)">XEM VỊ TRÍ</button> <button class="secondary" onclick="adminIncidentAction('+JSON.stringify(String(x.id))+',\'edit\')">SỬA</button> <button class="danger" onclick="adminIncidentAction('+JSON.stringify(String(x.id))+',\'delete\')">XÓA</button></div>');
  $('sheet').innerHTML=h;
 }
 function renderSettingsSheet(){
@@ -1370,14 +1393,14 @@ function startRoutePreview(){
   if(is3DMode&&map3dReady){
    ensure3DVehicle([c[1],c[0]]);map3dVehicleMarker?.setRotation(bearing);
    const el=map3dVehicleMarker?.getElement();if(el){el.style.transform='';el.style.zIndex='1000';}
-   if(now-previewLastCameraAt>350){previewLastCameraAt=now;set3DDrivingCamera([c[1],c[0]],bearing,previewSpeed,350);}
+   if(now-previewLastCameraAt>850){previewLastCameraAt=now;set3DDrivingCamera([c[1],c[0]],bearing,previewSpeed,950);}
   }else{
    if(previewMarker){previewMarker.setLatLng([c[1],c[0]]);}
    if(typeof map.setBearing==='function'){
     const current=map.getBearing(),delta=((bearing-current+540)%360)-180;
     if(Math.abs(delta)>1.5)map.setBearing(current+Math.max(-8,Math.min(8,delta*.35)));
    }
-   if(now-previewLastCameraAt>300){previewLastCameraAt=now;map.setView([c[1],c[0]],Math.max(18.0,map.getZoom()),{animate:true,duration:.28});}
+   if(now-previewLastCameraAt>650){previewLastCameraAt=now;map.panTo([c[1],c[0]],{animate:true,duration:.65});}
   }
   updatePreviewVoice([c[1],c[0]]);
  },250);
