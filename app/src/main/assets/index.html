@@ -77,6 +77,27 @@ button{border:0;border-radius:12px;padding:11px 13px;background:var(--blue);colo
 #sheet input[type=color]{width:54px;height:34px;border:0;background:transparent}
 #sheet .switchrow{min-height:42px}
 #voiceToggle{font-size:18px;min-width:48px}
+
+/* Dark translucent cockpit palette */
+:root{--nav-glass:rgba(18,31,45,.70);--nav-text:#edf4fb}
+.float-widget{background:var(--nav-glass)!important;color:var(--nav-text)!important;border:1px solid rgba(160,190,215,.38)!important;backdrop-filter:blur(12px);box-shadow:0 5px 18px #0005}
+.widget-head,.widget-number small,.eta-widget small,.widget-unit{color:#d6e2ed!important}.widget-number{color:#fff}
+.round-action,.float-dock button,.float-preview button{background:rgba(20,35,51,.70)!important;color:#eaf2fa!important;border:1px solid rgba(170,195,218,.48)!important;backdrop-filter:blur(10px);box-shadow:0 4px 14px #0005}
+.float-dock button.active{background:rgba(24,105,174,.78)!important;color:#fff!important}
+.round-action.success{background:rgba(12,105,75,.76)!important}.round-action.danger{background:rgba(130,35,42,.76)!important}
+#sheet{background:rgba(15,29,43,.94)!important;color:#edf4fb!important;border:1px solid #526b81!important;backdrop-filter:blur(16px)}
+#sheet h3,#sheet .subtle{color:#c4d4e2!important}#sheet .switchrow{border-color:#526579!important;color:#edf4fb!important}
+#sheet button.secondary,#sheet .vehicle-choice{background:rgba(37,57,76,.82)!important;color:#edf4fb!important;border-color:#71879b!important}
+#sheet input[type=range]{accent-color:#4ba6e8}
+#map3d{z-index:1}#bottom{z-index:900;pointer-events:none}#bottom>*{pointer-events:auto}
+#bottom button{touch-action:manipulation;position:relative;z-index:950}
+
+/* Automatic day/night map palette */
+body.hnav-map-dark #map .leaflet-tile{filter:brightness(.48) invert(.88) hue-rotate(185deg) saturate(.72) contrast(.92)}
+body.hnav-map-dark #map3d canvas{filter:brightness(.72) saturate(.78)}
+body.hnav-map-dark #map .leaflet-overlay-pane{filter:brightness(.9)}
+body.hnav-map-dark .leaflet-control-attribution{background:rgba(12,24,37,.65);color:#d7e1eb}
+body.hnav-map-dark .leaflet-control-attribution a{color:#8ecbff}
 </style>
 </head>
 <body>
@@ -100,7 +121,7 @@ button{border:0;border-radius:12px;padding:11px 13px;background:var(--blue);colo
 <div id="sheet" class="sheet"></div>
 <div id="bottom" aria-label="Điều khiển bản đồ">
  <div class="float-widget speed-widget" data-widget="speed" id="speedWidget">
-  <div class="widget-head">GPS <button class="tiny" onclick="adjustWidget('speed',-1)">−</button><button class="tiny" onclick="adjustWidget('speed',1)">＋</button></div>
+  <div class="widget-head">GPS · HIỆU CHỈNH ±1 <button class="tiny" onclick="adjustGpsSpeed(-1)">−</button><button class="tiny" onclick="adjustGpsSpeed(1)">＋</button></div>
   <div class="widget-number"><span id="speed">--</span><small> km/h</small></div>
  </div>
  <div class="float-widget limit-widget" data-widget="limit" id="limitWidget">
@@ -141,8 +162,14 @@ button{border:0;border-radius:12px;padding:11px 13px;background:var(--blue);colo
 let map,me=null,meMarker=null,routeLine=null,destinationMarker=null,mapInitStarted=false;
 let limit=Number(localStorage.getItem('hnav_limit')||60),routeData=null,steps=[],stepIndex=0,navigating=false,destination=null,lastSpeedAlert=0,lastSpokenStep=-1;
 let vehicleType=localStorage.getItem('hnav_vehicle')||'car',voiceEnabled=localStorage.getItem('hnav_voice')!=='false';
-let vehicleScale=Number(localStorage.getItem('hnav_vehicle_scale')||1),vehicleColor=localStorage.getItem('hnav_vehicle_color')||'#1677e8';
+let vehicleScale=Number(localStorage.getItem('hnav_vehicle_scale')||1),vehicleColor=localStorage.getItem('hnav_vehicle_color')||'#263f59';
+let gpsSpeedOffset=Number(localStorage.getItem('hnav_gps_speed_offset')||0),smoothedSpeedKmh=null,lastGpsFix=null,lastSpeedAt=0,lastPositionAt=0;
+let filteredHeading=null,lastHeadingUpdate=0,lastCameraCenterAt=0,smoothedPosition=null;
 let previewSpeed=Number(localStorage.getItem('hnav_preview_speed')||45),previewStartedAt=0,previewDistances=[],lastGuidanceStep=-1,lastGuidanceStage=0;
+let previewTravelledMeters=0,previewLastTick=0,previewGuidanceStep=-1,previewGuidanceStage=0,previewLastSpoken=-1;
+let hnavWakeLock=null,wakeLockEnabled=localStorage.getItem('hnav_keep_screen')!=='false';
+let themeMode=localStorage.getItem('hnav_theme_mode')||'auto',ambientLux=null,ambientSensor=null,lastThemeDecision=null,ambientLowCount=0,ambientHighCount=0;
+
 
 let map3d=null,map3dReady=false,is3DMode=false,car3DMarker=null;
 let prefs={speed:true,incidents:true,autoReroute:true};
@@ -161,35 +188,23 @@ function geoPoint(coord){
 function update3DVehicle(){
  if(!map3dReady||!me)return;
  if(!map3dVehicleMarker){
-  const el=document.createElement('div');
-  el.className='hnav-3d-vehicle';
-  el.innerHTML=vehicleSvg(vehicleType);
-  el.style.width=(58*vehicleScale)+'px';el.style.height=(72*vehicleScale)+'px';
-  map3dVehicleMarker=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'})
-   .setLngLat([me[1],me[0]]).addTo(map3d);
+  const el=document.createElement('div');el.className='hnav-3d-vehicle';el.innerHTML=vehicleSvg(vehicleType);
+  el.style.width=(58*vehicleScale)+'px';el.style.height=(72*vehicleScale)+'px';el.style.cursor='pointer';el.title='Chạm để đổi kiểu xe';
+  const svg=el.querySelector('svg');if(svg){svg.style.width=(54*vehicleScale)+'px';svg.style.height=(66*vehicleScale)+'px';}
+  el.addEventListener('click',openVehiclePicker);
+  map3dVehicleMarker=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat([me[1],me[0]]).addTo(map3d);
  }else{
   map3dVehicleMarker.setLngLat([me[1],me[0]]);
-  map3dVehicleMarker.getElement().innerHTML=vehicleSvg(vehicleType);map3dVehicleMarker.getElement().querySelector('svg').style.width=(54*vehicleScale)+'px';map3dVehicleMarker.getElement().querySelector('svg').style.height=(66*vehicleScale)+'px';
+  const el=map3dVehicleMarker.getElement();el.innerHTML=vehicleSvg(vehicleType);
+  const svg=el.querySelector('svg');if(svg){svg.style.width=(54*vehicleScale)+'px';svg.style.height=(66*vehicleScale)+'px';}
  }
- if(is3DMode&&followVehicle){
-  const now=Date.now();
-  const speedKmh=Number($('speed')?.textContent)||0;
-  let target=Number.isFinite(gpsMeta.heading)&&speedKmh>7?gpsMeta.heading:null;
-  if(target===null&&navigating)target=routeBearingAt(me);
-  if(target===null&&deviceHeading!==null)target=(deviceHeading+headingOffset+360)%360;
-  if(target!==null){
-   if(smooth3DBearing===null)smooth3DBearing=target;
-   else{
-    const delta=((target-smooth3DBearing+540)%360)-180;
-    smooth3DBearing=(smooth3DBearing+delta*0.22+360)%360;
-   }
-  }
-  // Limit camera updates to reduce visible shaking from noisy GPS/compass readings.
-  if(now-last3DCameraAt>850){
-   last3DCameraAt=now;
-   const bearing=smooth3DBearing===null?map3d.getBearing():smooth3DBearing;
-   map3d.easeTo({center:[me[1],me[0]],zoom:Math.max(map3d.getZoom(),16),pitch:62,bearing,duration:700,essential:true});
-  }
+ if(is3DMode&&followVehicle&&Date.now()-lastCameraCenterAt>1500){
+  lastCameraCenterAt=Date.now();
+  const bearing=filteredHeading===null?map3d.getBearing():filteredHeading;
+  const delta=Math.abs(((bearing-map3d.getBearing()+540)%360)-180);
+  const opts={center:[me[1],me[0]],zoom:Math.max(map3d.getZoom(),16),pitch:58,duration:1300,essential:true};
+  if(delta>10)opts.bearing=bearing;
+  map3d.easeTo(opts);
  }
 }
 function update3DRoute(){
@@ -265,10 +280,84 @@ function toggleReal3D(){
   status('Đã bật bản đồ 3D vector. Nhà 3D phụ thuộc dữ liệu bản đồ tại khu vực.');
  }else{map?.invalidateSize(true);if(me&&typeof map?.setBearing==='function'){const h=smooth3DBearing??gpsMeta.heading;if(Number.isFinite(h))map.setBearing((360-h)%360)}status('Đã trở về bản đồ 2D.')}
 }
+
+async function requestHieuNavWakeLock(){
+ if(!wakeLockEnabled)return;
+ try{
+  if(navigator.wakeLock?.request){
+   if(!hnavWakeLock)hnavWakeLock=await navigator.wakeLock.request('screen');
+   hnavWakeLock.addEventListener('release',()=>{hnavWakeLock=null;});
+  }else if(window.HieuNavAndroid?.setKeepScreenOn){
+   window.HieuNavAndroid.setKeepScreenOn(true);
+  }
+ }catch(e){status('Không giữ được màn hình sáng. Kiểm tra quyền/tiết kiệm pin của Android.');}
+}
+function releaseHieuNavWakeLock(){
+ try{if(hnavWakeLock){hnavWakeLock.release();hnavWakeLock=null;}}catch(e){}
+ if(window.HieuNavAndroid?.setKeepScreenOn)try{window.HieuNavAndroid.setKeepScreenOn(false)}catch(e){}
+}
+function setKeepScreenOn(on){
+ wakeLockEnabled=!!on;localStorage.setItem('hnav_keep_screen',String(wakeLockEnabled));
+ if(wakeLockEnabled){requestHieuNavWakeLock();status('Đã bật giữ màn hình sáng khi mở HieuNav.');}
+ else{releaseHieuNavWakeLock();status('Đã tắt chế độ giữ màn hình sáng.');}
+}
+document.addEventListener('visibilitychange',()=>{
+ if(document.visibilityState==='visible'&&wakeLockEnabled)requestHieuNavWakeLock();
+});
+window.addEventListener('pageshow',()=>{if(wakeLockEnabled)requestHieuNavWakeLock()});
+function applyMapTheme(dark,reason){
+ if(lastThemeDecision===dark)return;
+ lastThemeDecision=dark;document.body.classList.toggle('hnav-map-dark',dark);
+ const label=$('themeStatus');if(label)label.textContent=dark?'Tối':'Sáng';
+ const source=$('themeReason');if(source)source.textContent=reason||'Tự động';
+}
+function evaluateAutoTheme(lux){
+ if(themeMode==='light'){applyMapTheme(false,'Thủ công');return}
+ if(themeMode==='dark'){applyMapTheme(true,'Thủ công');return}
+ if(Number.isFinite(lux)){
+  ambientLux=lux;
+  if(lux<22){ambientLowCount++;ambientHighCount=0}
+  else if(lux>65){ambientHighCount++;ambientLowCount=0}
+  else{ambientLowCount=0;ambientHighCount=0}
+  if(ambientLowCount>=3)applyMapTheme(true,'Cảm biến ánh sáng · '+Math.round(lux)+' lux');
+  if(ambientHighCount>=3)applyMapTheme(false,'Cảm biến ánh sáng · '+Math.round(lux)+' lux');
+ }else{
+  const h=new Date().getHours(),dark=h>=18||h<6;
+  applyMapTheme(dark,'Tự động theo giờ · cảm biến không hỗ trợ');
+ }
+}
+async function startAmbientThemeSensor(){
+ if(themeMode!=='auto'){evaluateAutoTheme(null);return}
+ // AmbientLightSensor is available only on supported secure WebView/browser builds.
+ try{
+  if('AmbientLightSensor'in window){
+   ambientSensor=new AmbientLightSensor({frequency:1});
+   ambientSensor.addEventListener('reading',()=>evaluateAutoTheme(ambientSensor.illuminance));
+   ambientSensor.addEventListener('error',()=>evaluateAutoTheme(null));
+   ambientSensor.start();return;
+  }
+ }catch(e){}
+ // Legacy Android WebView implementations may expose DeviceLightEvent.
+ if('ondevicelight'in window){
+  window.addEventListener('devicelight',e=>evaluateAutoTheme(Number(e.value)),{passive:true});return;
+ }
+ evaluateAutoTheme(null);
+}
+function setThemeMode(mode){
+ themeMode=['auto','light','dark'].includes(mode)?mode:'auto';
+ localStorage.setItem('hnav_theme_mode',themeMode);
+ if(ambientSensor){try{ambientSensor.stop()}catch(e){}ambientSensor=null}
+ lastThemeDecision=null;ambientLowCount=0;ambientHighCount=0;
+ startAmbientThemeSensor();
+ if($('themeMode'))$('themeMode').value=themeMode;
+ if($('themeStatus'))$('themeStatus').textContent=themeMode==='auto'?'Tự động':themeMode==='dark'?'Tối':'Sáng';
+ status(themeMode==='auto'?'Đã bật tự động sáng/tối.':'Đã chuyển giao diện '+(themeMode==='dark'?'tối':'sáng')+'.');
+}
 function init(){
  if(mapInitStarted)return;
  if(!window.L){status('Không tải được thư viện bản đồ Leaflet. Kiểm tra Internet rồi tải lại ứng dụng.');return} if($('voiceToggle')){$('voiceToggle').textContent=voiceEnabled?'🔊':'🔇';$('voiceToggle').title=voiceEnabled?'Tắt hướng dẫn giọng nói':'Bật hướng dẫn giọng nói';}
  mapInitStarted=true;
+ requestHieuNavWakeLock();startAmbientThemeSensor();
  try{
  map=L.map('map',{zoomControl:false,rotate:true,touchRotate:true,shiftKeyRotate:true}).setView([16,108],6);
  const tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{subdomains:'abc',maxZoom:19,attribution:'© OpenStreetMap contributors',crossOrigin:true});
@@ -277,7 +366,7 @@ function init(){
  tiles.on('tileerror',()=>{tileErrors++;if(!tileLoaded&&tileErrors>=3)status('Không tải được ảnh bản đồ. Kiểm tra kết nối Internet hoặc máy chủ bản đồ.')});
  tiles.addTo(map);
  map.whenReady(()=>{setTimeout(()=>map.invalidateSize(true),350);status('Bản đồ đang khởi tạo…')});
- drawIncidentMarkers();installMapBrowseBehavior();setFollowButton(true);refreshRoadRuleStatus();map.on('click',e=>openMapPointPicker(e.latlng));
+ map.getContainer().addEventListener('pointerdown',()=>{if(wakeLockEnabled)requestHieuNavWakeLock()},{passive:true});drawIncidentMarkers();installMapBrowseBehavior();setFollowButton(true);refreshRoadRuleStatus();map.on('click',e=>openMapPointPicker(e.latlng));
  if(navigator.geolocation)navigator.geolocation.watchPosition(p=>{
   const c=p.coords;hieuNavUpdateLocation(c.latitude,c.longitude,c.speed||0,{accuracy:c.accuracy,altitude:c.altitude,heading:c.heading,timestamp:p.timestamp});
  },e=>status('Không lấy được GPS: '+e.message),{enableHighAccuracy:true,maximumAge:1500,timeout:15000});
@@ -309,7 +398,11 @@ function vehicleSvg(type){
  ${type==='motorcycle'?'<circle cx="29" cy="7" r="3" fill="#f7e7a5" stroke="#26394b"/><circle cx="29" cy="61" r="4" fill="#18232d"/>':''}
  </g></svg>`;
 }
-function vehicleIcon(){const w=54*vehicleScale,h=66*vehicleScale;return L.divIcon({className:'vehicle-marker-wrap',html:'<div id="vehicleGlyph" class="vehicle-marker" style="width:'+w+'px;height:'+h+'px;transform:rotate(0deg)">'+vehicleSvg(vehicleType)+'</div>',iconSize:[w,h],iconAnchor:[w/2,h/2]})}
+function vehicleIcon(){
+ const w=54*vehicleScale,h=66*vehicleScale;
+ const svg=vehicleSvg(vehicleType).replace('<svg ','<svg style="width:'+w+'px;height:'+h+'px" ');
+ return L.divIcon({className:'vehicle-marker-wrap',html:'<div id="vehicleGlyph" class="vehicle-marker" style="width:'+w+'px;height:'+h+'px;transform:rotate(0deg)">'+svg+'</div>',iconSize:[w,h],iconAnchor:[w/2,h/2]});
+}
 
 function bearingBetween(a,b){
  const toRad=x=>x*Math.PI/180,toDeg=x=>x*180/Math.PI;
@@ -327,32 +420,35 @@ function routeBearingAt(pos){
  }
  return best<100?bearing:null;
 }
+function smoothAngle(current,target,alpha){
+ if(current===null||!Number.isFinite(current))return ((target%360)+360)%360;
+ const delta=((target-current+540)%360)-180;
+ if(Math.abs(delta)<7)return current;
+ return (current+delta*alpha+360)%360;
+}
 function updateVehicleHeading(){
- if(!meMarker)return;
- let heading=null;
- // Khi xe đang chạy, ưu tiên hướng chuyển động GPS; khi chậm/dừng dùng la bàn điện thoại.
- const gpsCourse=Number.isFinite(gpsMeta.heading)?gpsMeta.heading:null;
- const gpsSpeed=(Number($('speed')?.textContent)||0);
- if(gpsCourse!==null&&gpsSpeed>=8)heading=gpsCourse;
- else if(deviceHeading!==null)heading=(deviceHeading+headingOffset+360)%360;
- else if(gpsCourse!==null)heading=gpsCourse;
- // Khi có tuyến, icon bám hướng đoạn đường thực tế gần nhất để tránh xoay theo nhiễu cảm biến.
- const rb=routeBearingAt(me);
- if(rb!==null&&navigating&&gpsSpeed<8)heading=rb;
- if(heading!==null&&map&&typeof map.setBearing==='function'&&followVehicle){
-  const targetBearing=(360-heading)%360;
-  const current=typeof map.getBearing==='function'?map.getBearing():0;
-  const delta=((targetBearing-current+540)%360)-180;
-  if(Math.abs(delta)>1.2)map.setBearing(current+delta*0.22);
+ let target=null;const speedKmh=Number($('speed')?.textContent)||0;
+ const course=Number.isFinite(gpsMeta.heading)?gpsMeta.heading:null;
+ if(course!==null&&speedKmh>=12&&(!Number.isFinite(gpsMeta.accuracy)||gpsMeta.accuracy<=25))target=course;
+ else if(deviceHeading!==null)target=(deviceHeading+headingOffset+360)%360;
+ else if(course!==null&&speedKmh>=5)target=course;
+ const rb=routeBearingAt(me);if(rb!==null&&navigating&&speedKmh<7)target=rb;
+ if(target===null)return;
+ filteredHeading=smoothAngle(filteredHeading,target,speedKmh>15?.10:.055);
+ const now=Date.now();if(now-lastHeadingUpdate<450)return;lastHeadingUpdate=now;
+ const h=filteredHeading;
+ if(map&&followVehicle&&typeof map.setBearing==='function'){
+  const desired=(360-h)%360,current=map.getBearing(),delta=((desired-current+540)%360)-180;
+  if(Math.abs(delta)>9)map.setBearing(current+Math.sign(delta)*Math.min(7,Math.abs(delta)*.12));
  }
  const glyph=document.getElementById('vehicleGlyph');
- if(glyph&&heading!==null)glyph.style.transform='rotate('+(map&&typeof map.getBearing==='function'?heading+map.getBearing():heading)+'deg)';
+ if(glyph)glyph.style.transform='rotate('+(map&&typeof map.getBearing==='function'?h+map.getBearing():h)+'deg)';
 }
 function onDeviceOrientation(ev){
  let h=null;
  if(Number.isFinite(ev.webkitCompassHeading))h=ev.webkitCompassHeading;
  else if(Number.isFinite(ev.alpha))h=(360-ev.alpha)%360;
- if(h!==null){deviceHeading=h;updateVehicleHeading()}
+ if(h!==null){filteredHeading=smoothAngle(filteredHeading,(h+headingOffset+360)%360,.035);deviceHeading=filteredHeading;}
 }
 async function enableOrientation(){
  if(orientationStarted)return true;
@@ -395,15 +491,49 @@ async function enableDriveAssist(){
  if(me)toggleFollow(true);
 }
 function hieuNavUpdateLocation(lat,lon,speed,meta={}){
- gpsMeta=meta||{};me=[lat,lon];let s=Math.max(0,Math.round((speed||0)*3.6));$('speed').textContent=s;
- $('gpsDetails').textContent='GPS: '+lat.toFixed(5)+', '+lon.toFixed(5)+' · Độ chính xác: '+(Number.isFinite(gpsMeta.accuracy)?Math.round(gpsMeta.accuracy):'--')+' m · Hướng: '+(Number.isFinite(gpsMeta.heading)?Math.round(gpsMeta.heading)+'°':'--')+(Number.isFinite(gpsMeta.altitude)?' · Cao độ: '+Math.round(gpsMeta.altitude)+' m':'');
- if(!meMarker){meMarker=L.marker(me,{icon:vehicleIcon(),keyboard:true,title:'Chạm để đổi kiểu xe'}).addTo(map);meMarker.on('click',openVehiclePicker);map.setView(me,16)}else meMarker.setLatLng(me);updateVehicleHeading();update3DVehicle();refreshRoadRuleStatus();
- if(followVehicle&&map&&!is3DMode){
+ gpsMeta=meta||{};
+ const now=Number(gpsMeta.timestamp)||Date.now(),point=[lat,lon],accuracy=Number(gpsMeta.accuracy);
+ let rawKmh=Number.isFinite(speed)&&speed>=0?speed*3.6:null;
+ if(lastGpsFix&&now>lastGpsFix.t){
+  const dt=(now-lastGpsFix.t)/1000,derived=dt>0&&dt<12?dist(lastGpsFix.p,point)/dt*3.6:null;
+  if((rawKmh===null||rawKmh>180||(rawKmh<1.5&&derived!==null&&derived>4))&&derived!==null&&accuracy<=25)rawKmh=derived;
+ }
+ if(Number.isFinite(accuracy)&&accuracy<=35)lastGpsFix={p:point,t:now};
+ rawKmh=Number.isFinite(rawKmh)?Math.max(0,Math.min(180,rawKmh+gpsSpeedOffset)):null;
+ if(rawKmh!==null){
+  if(rawKmh<3.5)rawKmh=0;
+  if(smoothedSpeedKmh===null)smoothedSpeedKmh=rawKmh;
+  else{
+   const dt=Math.max(.2,Math.min(3,(now-lastSpeedAt)/1000||1));
+   const alpha=rawKmh>smoothedSpeedKmh?.25:.13;
+   const target=smoothedSpeedKmh+(rawKmh-smoothedSpeedKmh)*alpha;
+   const maxDelta=(rawKmh>smoothedSpeedKmh?8:10)*dt;
+   smoothedSpeedKmh+=Math.max(-maxDelta,Math.min(maxDelta,target-smoothedSpeedKmh));
+  }
+ }
+ lastSpeedAt=now;
+ const s=Math.round(smoothedSpeedKmh||0);$('speed').textContent=s;
+ if(Number.isFinite(accuracy)&&accuracy<=35){
+  if(!smoothedPosition)smoothedPosition=point.slice();
+  else{
+   const jump=dist(smoothedPosition,point),dt=Math.max(.5,Math.min(5,(now-lastPositionAt)/1000||1));
+   const maxJump=Math.max(40,(s/3.6)*dt*2.2);
+   if(jump<=maxJump){const w=Math.max(.10,Math.min(.42,16/Math.max(8,accuracy)));smoothedPosition=[smoothedPosition[0]+(lat-smoothedPosition[0])*w,smoothedPosition[1]+(lon-smoothedPosition[1])*w];}
+  }
+  lastPositionAt=now;
+ }
+ me=smoothedPosition||point;
+ $('gpsDetails').textContent='GPS: '+lat.toFixed(5)+', '+lon.toFixed(5)+' · Sai số: '+(Number.isFinite(accuracy)?Math.round(accuracy):'--')+' m · Hiệu chỉnh '+(gpsSpeedOffset>=0?'+':'')+gpsSpeedOffset+' km/h';
+ if(!meMarker){meMarker=L.marker(me,{icon:vehicleIcon(),keyboard:true,title:'Chạm để đổi kiểu xe'}).addTo(map);meMarker.on('click',openVehiclePicker);map.setView(me,16)}else meMarker.setLatLng(me);
+ updateVehicleHeading();update3DVehicle();refreshRoadRuleStatus();
+ if(followVehicle&&map&&!is3DMode&&Date.now()-lastCameraCenterAt>1300){
+  lastCameraCenterAt=Date.now();
   if(map.getZoom()<15)map.setZoom(16);
-  map.panTo(me,{animate:true,duration:.35});
+  const c=map.getCenter();
+  if(dist([c.lat,c.lng],me)>8)map.panTo(me,{animate:true,duration:1.15});
  }
  if(prefs.speed&&s>limit&&Date.now()-lastSpeedAlert>12000){lastSpeedAlert=Date.now();status('CẢNH BÁO: Vượt ngưỡng tốc độ đã đặt.');speak('Cảnh báo vượt tốc độ');}
- if(navigating){updateNavigationProgress();saveTrafficSample(me,s,Number.isFinite(gpsMeta.heading)?gpsMeta.heading:null,gpsMeta.accuracy);checkOffRouteAndReroute()}
+ if(navigating){updateNavigationProgress();saveTrafficSample(me,s,Number.isFinite(gpsMeta.heading)?gpsMeta.heading:null,accuracy);checkOffRouteAndReroute();}
  checkNearbyIncidents();
 }
 function centerOnMe(){if(me){toggleFollow(true)}else status('Chưa có GPS. Hãy bật định vị.')}
@@ -860,24 +990,33 @@ function renderSettingsSheet(){
  h+='<div class="switchrow">Cảnh báo sự cố gần vị trí <input type="checkbox" '+(prefs.incidents?'checked':'')+' onchange="prefs.incidents=this.checked"></div>';
  h+='<div class="switchrow">Tự động tính lại khi lệch tuyến <input type="checkbox" '+(prefs.autoReroute?'checked':'')+' onchange="prefs.autoReroute=this.checked"></div>';
  h+='<div class="switchrow">Ngưỡng tốc độ <b>'+limit+' km/h <button onclick="changeLimit()">ĐỔI</button></b></div>';
+ h+='<div class="switchrow">Hiệu chỉnh tốc độ GPS <b>'+(gpsSpeedOffset>=0?'+':'')+gpsSpeedOffset+' km/h</b></div>';
+ h+='<div class="row"><button class="secondary" onclick="adjustGpsSpeed(-1)">− 1</button><button class="secondary" onclick="adjustGpsSpeed(1)">+ 1</button><button class="secondary" onclick="resetGpsSpeedCalibration()">ĐẶT LẠI</button></div>';
  h+='<h3>Giao diện xe</h3>';
  h+='<div class="switchrow">Kích thước biểu tượng <b id="vehicleScaleValue">'+Math.round(vehicleScale*100)+'%</b></div>';
  h+='<input aria-label="Kích thước biểu tượng xe" type="range" min="65" max="165" step="5" value="'+Math.round(vehicleScale*100)+'" oninput="setVehicleScale(this.value/100)" style="width:100%">';
  h+='<div class="switchrow">Màu xe <input type="color" value="'+vehicleColor+'" onchange="setVehicleColor(this.value)"></div>';
  h+='<button class="secondary" style="width:100%" onclick="openVehiclePicker()">CHỌN KIỂU XE</button>';
+ h+='<h3>Màn hình & giao diện</h3>';
+ h+='<div class="switchrow">Giữ màn hình sáng khi dùng bản đồ <input type="checkbox" '+(wakeLockEnabled?'checked':'')+' onchange="setKeepScreenOn(this.checked)"></div>';
+ h+='<div class="switchrow">Chế độ giao diện <select id="themeMode" onchange="setThemeMode(this.value)"><option value="auto" '+(themeMode==='auto'?'selected':'')+'>Tự động theo cảm biến</option><option value="light" '+(themeMode==='light'?'selected':'')+'>Luôn sáng</option><option value="dark" '+(themeMode==='dark'?'selected':'')+'>Luôn tối</option></select></div>';
+ h+='<div class="switchrow">Hiện tại: <b id="themeStatus">'+(lastThemeDecision===null?'Tự động':lastThemeDecision?'Tối':'Sáng')+'</b></div>';
+ h+='<div class="subtle" id="themeReason">Tự động ưu tiên cảm biến ánh sáng; nếu thiết bị không hỗ trợ sẽ dùng giờ ngày/đêm. Cảm biến ánh sáng có thể nhận biết khi vào hầm nếu được Android cấp quyền và phần cứng hỗ trợ.</div>';
  h+='<h3>La bàn & hướng bản đồ</h3>';
  h+='<div class="switchrow">Bám theo hướng di chuyển <input type="checkbox" '+(followVehicle?'checked':'')+' onchange="toggleFollow(this.checked)"></div>';
  h+='<button class="secondary" style="width:100%;margin:5px 0" onclick="enableOrientation()">BẬT CẢM BIẾN ĐIỆN THOẠI</button>';
  h+='<button class="secondary" style="width:100%;margin:5px 0" onclick="calibrateHeading()">HIỆU CHỈNH LA BÀN</button>';
  h+='<div class="subtle">Khi xe chạy, ưu tiên hướng GPS. Khi xe dừng/chạy chậm, dùng la bàn điện thoại. Cần đặt điện thoại đúng chiều trên giá đỡ.</div>';
  h+='<h3>Xem trước lộ trình</h3>';
- h+='<div class="switchrow">Tốc độ mô phỏng <b id="previewSpeedValue">'+previewSpeed+' km/h</b></div>';
- h+='<input type="range" min="20" max="100" step="5" value="'+previewSpeed+'" oninput="savePreviewSpeed(this.value)" style="width:100%">';
+ h+='<div class="switchrow">Tốc độ ảo khi xem trước <b id="previewSpeedValue">'+previewSpeed+' km/h</b></div>';
+ h+='<input type="range" min="10" max="130" step="5" value="'+previewSpeed+'" oninput="savePreviewSpeed(this.value)" style="width:100%">';
+ h+='<div class="subtle">Có thể thay đổi tốc độ ngay khi xe mô phỏng đang chạy; vị trí xe sẽ tăng/giảm tốc mượt, không nhảy cóc. Giọng đọc dùng công tắc âm thanh phía trên.</div>';
  h+='<div class="row"><button class="success" onclick="startRoutePreview()">▶ CHẠY THỬ</button><button class="secondary" onclick="stopRoutePreview()">■ DỪNG</button></div>';
  h+='<h3>Tuyến đường & bản đồ</h3>';
  h+='<div class="switchrow">Tự động tính lại tuyến <span>OSRM</span></div>';
  h+='<div class="subtle">Bản đồ OpenStreetMap. Hướng xoay theo GPS/la bàn cần được cấp quyền cảm biến và GPS đủ chính xác.</div>';
  $('sheet').innerHTML=h;
+ if($('themeStatus'))$('themeStatus').textContent=themeMode==='auto'?'Tự động':themeMode==='dark'?'Tối':'Sáng';
 }
 function openVehiclePicker(){
  const choices=[['car','SUV / VinFast VF5','Gầm cao · ô tô con'],['taxi','Taxi','Xe dịch vụ'],['van','Xe van','Xe chở hàng nhẹ'],['truck','Xe tải','Xe tải / xe giao hàng'],['motorcycle','Xe máy','Chế độ xe máy']];
@@ -896,23 +1035,32 @@ function setVehicleType(v){
  if(map3dVehicleMarker){map3dVehicleMarker.getElement().innerHTML=vehicleSvg(vehicleType)}
  closeSheet();status('Đã đổi giao diện xe: '+vehicleLabel());
 }
-function savePreviewSpeed(v){previewSpeed=Number(v)||45;localStorage.setItem('hnav_preview_speed',previewSpeed);const e=$('previewSpeedValue');if(e)e.textContent=previewSpeed+' km/h';}
+function savePreviewSpeed(v){
+ previewSpeed=Math.max(10,Math.min(130,Number(v)||45));
+ localStorage.setItem('hnav_preview_speed',previewSpeed);
+ const e=$('previewSpeedValue');if(e)e.textContent=previewSpeed+' km/h';
+ const live=$('previewLiveSpeed');if(live)live.textContent=previewSpeed+' km/h';
+ if(previewTimer)status('Đang xem trước · tốc độ mô phỏng '+previewSpeed+' km/h');
+}
 function setVehicleScale(v){
  vehicleScale=Math.max(.65,Math.min(1.65,Number(v)||1));
  localStorage.setItem('hnav_vehicle_scale',vehicleScale);
  if(meMarker)meMarker.setIcon(vehicleIcon());
  if(map3dVehicleMarker){
-  const el=map3dVehicleMarker.getElement();
-  const svg=el.querySelector('svg');
-  if(svg){svg.style.width=(54*vehicleScale)+'px';svg.style.height=(66*vehicleScale)+'px';}
+  const el=map3dVehicleMarker.getElement(),svg=el.querySelector('svg');
   el.style.width=(58*vehicleScale)+'px';el.style.height=(72*vehicleScale)+'px';
+  if(svg){svg.style.width=(54*vehicleScale)+'px';svg.style.height=(66*vehicleScale)+'px';}
  }
  const out=$('vehicleScaleValue');if(out)out.textContent=Math.round(vehicleScale*100)+'%';
+ const slider=document.querySelector('#sheet input[aria-label="Kích thước biểu tượng xe"]');if(slider)slider.value=Math.round(vehicleScale*100);
 }
 function setVehicleColor(v){
  vehicleColor=v;localStorage.setItem('hnav_vehicle_color',v);
  if(meMarker)meMarker.setIcon(vehicleIcon());
- if(map3dVehicleMarker)map3dVehicleMarker.getElement().innerHTML=vehicleSvg(vehicleType);map3dVehicleMarker.getElement().querySelector('svg').style.width=(54*vehicleScale)+'px';map3dVehicleMarker.getElement().querySelector('svg').style.height=(66*vehicleScale)+'px';
+ if(map3dVehicleMarker){
+  const el=map3dVehicleMarker.getElement();el.innerHTML=vehicleSvg(vehicleType);
+  const svg=el.querySelector('svg');if(svg){svg.style.width=(54*vehicleScale)+'px';svg.style.height=(66*vehicleScale)+'px';}
+ }
 }
 function toggleVoice(){
  voiceEnabled=!voiceEnabled;localStorage.setItem('hnav_voice',String(voiceEnabled));
@@ -944,9 +1092,33 @@ function clearRoute(){
  reveal();
 })();
 (function(){const style=document.createElement('style');style.textContent='#map.nav3d .leaflet-map-pane{transform-origin:50% 72%;rotate:x 42deg;scale:1.18;transition:rotate .45s ease,scale .45s ease} #map.nav3d .leaflet-tile-pane{filter:saturate(1.12) contrast(1.06)} #map.nav3d .leaflet-marker-pane{filter:drop-shadow(0 2px 2px #0005)}';document.head.appendChild(style)})();
+function updatePreviewVoice(position){
+ if(!voiceEnabled||!steps?.length)return;
+ let best=-1,bestDistance=Infinity;
+ for(let i=0;i<steps.length;i++){
+  const loc=steps[i]?.maneuver?.location;if(!loc)continue;
+  const d=dist(position,[loc[1],loc[0]]);
+  if(d<bestDistance&&d>18){bestDistance=d;best=i;}
+ }
+ if(best<0)return;
+ if(best!==previewGuidanceStep){previewGuidanceStep=best;previewGuidanceStage=0;}
+ const instruction=maneuverText(steps[best]);
+ if(bestDistance<=200&&previewGuidanceStage<1){
+  previewGuidanceStage=1;
+  setTurnBanner('XEM TRƯỚC · SẮP '+instruction.toUpperCase(),'Còn '+Math.round(bestDistance)+' m · tốc độ mô phỏng '+previewSpeed+' km/h');
+  speak('Sau 200 mét, '+instruction);
+ }
+ if(bestDistance<=55&&previewGuidanceStage<2){
+  previewGuidanceStage=2;
+  setTurnBanner('XEM TRƯỚC · '+instruction.toUpperCase(),'Còn '+Math.round(bestDistance)+' mét');
+  speak('Thực hiện '+instruction+' ngay');
+ }
+}
 function startRoutePreview(){
  if(!routeCoords||routeCoords.length<2){status('Hãy tìm điểm đến để có tuyến xem trước.');return}
- stopRoutePreview();navigating=false;previewIndex=0;previewStartedAt=Date.now();
+ stopRoutePreview();navigating=false;previewIndex=0;
+ previewStartedAt=Date.now();previewLastTick=previewStartedAt;previewTravelledMeters=0;
+ previewGuidanceStep=-1;previewGuidanceStage=0;previewLastSpoken=-1;
  previewDistances=[0];
  for(let i=1;i<routeCoords.length;i++)previewDistances[i]=previewDistances[i-1]+dist([routeCoords[i-1][1],routeCoords[i-1][0]],[routeCoords[i][1],routeCoords[i][0]]);
  if(is3DMode&&map3dReady){
@@ -957,11 +1129,16 @@ function startRoutePreview(){
   previewMarker=L.marker([routeCoords[0][1],routeCoords[0][0]],{icon:vehicleIcon(),interactive:false}).addTo(map);
  }
  const total=previewDistances[previewDistances.length-1]||0;
- status('Mô phỏng lộ trình ở '+previewSpeed+' km/h · '+(total/1000).toFixed(1)+' km.');
+ status('Xem trước lộ trình · tốc độ ảo '+previewSpeed+' km/h'+(voiceEnabled?' · có giọng đọc':' · giọng đọc đang tắt'));
+ if(voiceEnabled)speak('Bắt đầu xem trước lộ trình. Tốc độ mô phỏng '+previewSpeed+' ki lô mét một giờ.');
  previewTimer=setInterval(()=>{
-  const elapsed=(Date.now()-previewStartedAt)/1000;
-  const travelled=elapsed*previewSpeed/3.6;
-  if(travelled>=total){stopRoutePreview();status('Đã xem hết lộ trình mô phỏng.');return}
+  const now=Date.now(),dt=Math.min(1.0,Math.max(0,(now-previewLastTick)/1000));previewLastTick=now;
+  previewTravelledMeters+=previewSpeed/3.6*dt;
+  const travelled=previewTravelledMeters;
+  if(travelled>=total){
+   previewTravelledMeters=total;stopRoutePreview();status('Đã xem hết lộ trình mô phỏng.');
+   if(voiceEnabled)speak('Đã đến điểm đích trong phần xem trước.');return;
+  }
   let lo=0,hi=previewDistances.length-1;
   while(lo<hi){const mid=(lo+hi)>>1;if(previewDistances[mid]<travelled)lo=mid+1;else hi=mid;}
   const i=Math.max(1,lo),d0=previewDistances[i-1],d1=previewDistances[i]||d0+1,t=Math.max(0,Math.min(1,(travelled-d0)/Math.max(1,d1-d0)));
@@ -971,12 +1148,16 @@ function startRoutePreview(){
    map3d.getSource('hnav-preview')?.setData({type:'FeatureCollection',features:[{type:'Feature',geometry:{type:'Point',coordinates:c},properties:{}}]});
    map3d.easeTo({center:c,bearing,pitch:62,zoom:Math.max(16,map3d.getZoom()),duration:450});
   }else{
-   if(previewMarker){previewMarker.setLatLng([c[1],c[0]]);const el=previewMarker.getElement()?.querySelector('#vehicleGlyph');if(el)el.style.transform='rotate('+(bearing+(typeof map.getBearing==='function'?map.getBearing():0))+'deg)'}
-   if(typeof map.setBearing==='function')map.setBearing((360-bearing)%360);map.setView([c[1],c[0]],Math.max(16,map.getZoom()),{animate:true,duration:.4});
+   if(previewMarker){
+    previewMarker.setLatLng([c[1],c[0]]);
+    const el=previewMarker.getElement()?.querySelector('#vehicleGlyph');if(el)el.style.transform='rotate('+bearing+'deg)';
+   }
+   map.setView([c[1],c[0]],Math.max(16,map.getZoom()),{animate:true,duration:.4});
   }
+  updatePreviewVoice([c[1],c[0]]);
  },250);
 }
-function stopRoutePreview(){if(previewTimer){clearInterval(previewTimer);previewTimer=null}if(previewMarker&&map){map.removeLayer(previewMarker);previewMarker=null}if(map3dReady)map3d.getSource('hnav-preview')?.setData({type:'FeatureCollection',features:[]});if(!navigating&&map&&!driveAssist)map.getContainer().classList.remove('nav3d')}
+function stopRoutePreview(){if(previewTimer){clearInterval(previewTimer);previewTimer=null}previewLastTick=0;if(previewMarker&&map){map.removeLayer(previewMarker);previewMarker=null}if(map3dReady)map3d.getSource('hnav-preview')?.setData({type:'FeatureCollection',features:[]});if(!navigating&&map&&!driveAssist)map.getContainer().classList.remove('nav3d')}
 function toggleMapPerspective(){if(!map)return;map.getContainer().classList.toggle('nav3d');setTimeout(()=>map.invalidateSize(true),250);status(map.getContainer().classList.contains('nav3d')?'Đã bật bản đồ 3D vector với công trình nổi khi có dữ liệu.':'Đã tắt phối cảnh bản đồ.')}
 function toggleCompactUI(){
  document.body.classList.remove('hnav-compact');
@@ -991,6 +1172,12 @@ function installMapBrowseBehavior(){
 }
 window.hieuNavUpdateLocation=hieuNavUpdateLocation;
 
+function adjustGpsSpeed(delta){
+ gpsSpeedOffset=Math.max(-15,Math.min(15,gpsSpeedOffset+delta));
+ localStorage.setItem('hnav_gps_speed_offset',gpsSpeedOffset);
+ status('Hiệu chỉnh tốc độ GPS: '+(gpsSpeedOffset>=0?'+':'')+gpsSpeedOffset+' km/h');
+}
+function resetGpsSpeedCalibration(){gpsSpeedOffset=0;localStorage.setItem('hnav_gps_speed_offset','0');status('Đã đặt hiệu chỉnh tốc độ GPS về 0 km/h');}
 function adjustWidget(name,delta){
  const el=$(name+'Widget');if(!el)return;
  const k='hnav_widget_scale_'+name,cur=Number(localStorage.getItem(k)||1),next=Math.max(.75,Math.min(1.5,cur+delta*.1));
