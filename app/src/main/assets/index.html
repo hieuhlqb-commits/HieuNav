@@ -188,7 +188,7 @@ let limit=Number(localStorage.getItem('hnav_limit')||60),routeData=null,steps=[]
 let vehicleType=localStorage.getItem('hnav_vehicle')||'car',voiceEnabled=localStorage.getItem('hnav_voice')!=='false';
 let vehicleScale=Number(localStorage.getItem('hnav_vehicle_scale')||1),vehicleColor=localStorage.getItem('hnav_vehicle_color')||'#263f59';
 let gpsSpeedOffset=Number(localStorage.getItem('hnav_gps_speed_offset')||0),smoothedSpeedKmh=null,lastGpsFix=null,lastSpeedAt=0,lastPositionAt=0;
-let filteredHeading=null,lastHeadingUpdate=0,lastCameraCenterAt=0,smoothedPosition=null;
+let filteredHeading=null,lastHeadingUpdate=0,lastCameraCenterAt=0,smoothedPosition=null,lastHeadingFix=null;
 let previewSpeed=Number(localStorage.getItem('hnav_preview_speed')||45),previewStartedAt=0,previewDistances=[],lastGuidanceStep=-1,lastGuidanceStage=0;
 let previewTravelledMeters=0,previewLastTick=0,previewGuidanceStep=-1,previewGuidanceStage=0,previewLastSpoken=-1,previewPosition=null,previewLastCameraAt=0;
 let hnavWakeLock=null,wakeLockEnabled=localStorage.getItem('hnav_keep_screen')!=='false';
@@ -198,7 +198,7 @@ let themeMode=localStorage.getItem('hnav_theme_mode')||'auto',ambientLux=null,am
 let map3d=null,map3dReady=false,is3DMode=false,car3DMarker=null;
 let prefs={speed:true,incidents:true,autoReroute:true};
 let incidents=JSON.parse(localStorage.getItem('hnav_incidents')||'[]');
-let incidentLayer=null,alertedIncidents={},routeCoords=[],previewMarker=null,previewTimer=null,previewIndex=0,gpsMeta={};
+let incidentLayer=null,map3dIncidentMarkers=[],alertedIncidents={},routeCoords=[],previewMarker=null,previewTimer=null,previewIndex=0,gpsMeta={};
 let trafficMemory=JSON.parse(localStorage.getItem('hnav_traffic_memory_v1')||'{}'),lastTrafficSampleAt=0,lastTrafficSamplePos=null;let followVehicle=true,last3DCameraAt=0,smooth3DBearing=null,lastRerouteAt=0,offRouteSince=0,lastProgressCheck=0,routeRequestId=0;
 let driveAssist=false,deviceHeading=null,headingOffset=Number(localStorage.getItem("hnav_heading_offset")||0),orientationStarted=false;
 let viaPoints=[],viaMarkers=[],pendingMapPoint=null,guidanceTimer=null,guidanceTitle="",guidanceText="";
@@ -224,6 +224,7 @@ function set3DDrivingCamera(position,bearing,speed=45,duration=700){
 }
 function update3DVehicle(){
  if(!map3dReady||!me)return;
+ if(!map3dIncidentMarkers.length&&incidents.length)draw3DIncidentMarkers();
  if(!map3dVehicleMarker){
   const el=document.createElement('div');el.className='hnav-3d-vehicle';el.innerHTML=vehicleSvg(vehicleType);
   el.style.width=(58*vehicleScale)+'px';el.style.height=(72*vehicleScale)+'px';el.style.cursor='pointer';el.title='Chạm để đổi kiểu xe';
@@ -466,7 +467,7 @@ function smoothAngle(current,target,alpha){
 }
 function updateVehicleHeading(){
  let target=null;const speedKmh=Number($('speed')?.textContent)||0;
- const course=Number.isFinite(gpsMeta.heading)?gpsMeta.heading:null;
+ const course=Number.isFinite(gpsMeta.heading)?gpsMeta.heading:(Number.isFinite(gpsMeta.trackHeading)?gpsMeta.trackHeading:null);
  if(course!==null&&speedKmh>=12&&(!Number.isFinite(gpsMeta.accuracy)||gpsMeta.accuracy<=25))target=course;
  else if(deviceHeading!==null)target=(deviceHeading+headingOffset+360)%360;
  else if(course!==null&&speedKmh>=5)target=course;
@@ -477,7 +478,7 @@ function updateVehicleHeading(){
  const h=filteredHeading;
  if(map&&followVehicle&&typeof map.setBearing==='function'){
   const desired=(360-h)%360,current=map.getBearing(),delta=((desired-current+540)%360)-180;
-  if(Math.abs(delta)>9)map.setBearing(current+Math.sign(delta)*Math.min(7,Math.abs(delta)*.12));
+  if(Math.abs(delta)>4)map.setBearing(current+Math.sign(delta)*Math.min(12,Math.abs(delta)*.22));
  }
  const glyph=document.getElementById('vehicleGlyph');
  if(glyph)glyph.style.transform='rotate('+(map&&typeof map.getBearing==='function'?h+map.getBearing():h)+'deg)';
@@ -594,6 +595,14 @@ function hieuNavUpdateLocation(lat,lon,speed,meta={}){
   }
   lastPositionAt=now;
  }
+ // Derive course from successive GPS positions when the device compass/course is unavailable.
+ let trackHeading=null;
+ if(lastHeadingFix&&now>lastHeadingFix.t){
+  const moved=dist(lastHeadingFix.p,point),elapsed=(now-lastHeadingFix.t)/1000;
+  if(elapsed>=0.8&&elapsed<=8&&moved>=4)trackHeading=bearingBetween(lastHeadingFix.p,point);
+ }
+ if(accuracyOK)lastHeadingFix={p:point.slice(),t:now};
+ if(trackHeading!==null&&(!Number.isFinite(gpsMeta.heading)||(Number($('speed')?.textContent)||0)>=5))gpsMeta.trackHeading=trackHeading;
  me=smoothedPosition||point;
  const gpsInfo=$('gpsDetails');
  if(gpsInfo){
@@ -631,7 +640,12 @@ function setTurnBanner(a,b){
 }
 function openGuidanceDetails(){$('guidanceFull').innerHTML='<b>'+escapeHtml(guidanceTitle)+'</b><p>'+escapeHtml(guidanceText)+'</p>';$('guidanceDialog').style.display='flex'}
 function closeGuidanceDetails(){$('guidanceDialog').style.display='none'}
-function speak(t){if(!voiceEnabled)return;try{if(window.HieuNavAndroid?.speak)HieuNavAndroid.speak(t);else if('speechSynthesis'in window)speechSynthesis.speak(new SpeechSynthesisUtterance(t))}catch(e){}}
+function speak(t){
+ if(!voiceEnabled)return;
+ const clean=String(t||'').replace(/\\bngay\\b/giu,'').replace(/\\s+/g,' ').replace(/\\s+([,.!?])/g,'$1').trim();
+ if(!clean)return;
+ try{if(window.HieuNavAndroid?.speak)HieuNavAndroid.speak(clean);else if('speechSynthesis'in window){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(clean))}}catch(e){}
+}
 function fmtTime(sec){let m=Math.max(1,Math.round(sec/60));return m<60?m+' phút':Math.floor(m/60)+' giờ '+(m%60)+' phút'}
 function dist(a,b){const R=6371000,r=x=>x*Math.PI/180,d1=r(b[0]-a[0]),d2=r(b[1]-a[1]),x=Math.sin(d1/2)**2+Math.cos(r(a[0]))*Math.cos(r(b[0]))*Math.sin(d2/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
 function pointSegmentDistance(p,a,b){
@@ -1078,21 +1092,46 @@ function reportIncident(){
  refreshDuplicateConsensus();
  saveIncidents();drawIncidentMarkers();renderAlertsSheet();alert('Đã gửi báo cáo. Không cần quyền quản trị.');
 }
+function draw3DIncidentMarkers(){
+ if(!map3dReady||!map3d||!window.maplibregl)return;
+ map3dIncidentMarkers.forEach(m=>{try{m.remove()}catch(e){}});
+ map3dIncidentMarkers=[];
+ incidents.forEach(x=>{
+  const el=document.createElement('div');
+  el.style.cssText='min-width:30px;height:30px;padding:2px 5px;border:2px solid #fff;border-radius:50%;background:#b4232d;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;box-shadow:0 2px 7px #0008';
+  el.textContent=x.speedLimit?String(x.speedLimit):String(x.icon||'⚠️').slice(0,3);
+  el.title=(x.type||'Biển báo')+(x.speedLimit?' · '+x.speedLimit+' km/h':'');
+  const popup=new maplibregl.Popup({offset:18}).setHTML('<b>'+escapeHtml(x.type||'Biển báo')+'</b><br>'+escapeHtml(x.note||'')+(x.speedLimit?'<br>Giới hạn '+x.speedLimit+' km/h':'')+'<br>'+escapeHtml(x.status||'Chưa xác minh'));
+  const marker=new maplibregl.Marker({element:el,anchor:'bottom'})
+   .setLngLat([x.lon,x.lat]).setPopup(popup).addTo(map3d);
+  map3dIncidentMarkers.push(marker);
+ });
+}
 function drawIncidentMarkers(){
  if(!map)return;refreshDuplicateConsensus();if(incidentLayer)map.removeLayer(incidentLayer);incidentLayer=L.layerGroup().addTo(map);
- incidents=incidents.filter(x=>x.expires>Date.now());saveIncidents();
+ saveIncidents();
  incidents.forEach(x=>{
   const admin=`<br><button onclick="adminIncidentAction('${String(x.id)}','edit')">Quản trị: sửa</button> <button onclick="adminIncidentAction('${String(x.id)}','delete')">Quản trị: xóa</button>`;
   L.marker([x.lat,x.lon],{icon:incidentMarkerIcon(x)}).addTo(incidentLayer).bindPopup('<b>'+escapeHtml((x.kind==='residential_start'?'R.420':x.kind==='residential_end'?'R.421':(x.icon||'⚠️')))+' '+escapeHtml(x.type)+'</b><br>'+escapeHtml(x.note)+'<br>'+escapeHtml(x.status)+'<br>Giá trị: '+(x.speedLimit?x.speedLimit+' km/h':escapeHtml(x.type))+'<br>Trạng thái: '+(x.reportedValidity==='2'?'Đã hết hiệu lực':x.reportedValidity==='1'?'Đang khai báo hiệu lực':'Chưa rõ hiệu lực')+'<br>Hiệu lực: '+(x.startTime&&x.endTime?escapeHtml(x.startTime+'–'+x.endTime):'Cả ngày')+'<br>Phạm vi: '+(x.radiusMeters||35)+' m quanh điểm báo cáo<br>Phương tiện: '+(x.vehicleTypes?.length?escapeHtml(x.vehicleTypes.join(', ')):'Tất cả/chưa phân loại')+'<br>Số báo cáo trùng khớp: '+(x.confirmationCount||1)+admin);
  });
+ draw3DIncidentMarkers();
 }
 function checkNearbyIncidents(){
  if(!me||!prefs.incidents)return;
  incidents.forEach(x=>{
-  const d=dist(me,[x.lat,x.lon]),active=x.expires>Date.now()&&x.reportedValidity!=='2';
+  const d=dist(me,[x.lat,x.lon]),active=x.reportedValidity!=='2'&&(!x.expires||x.expires>Date.now());
   if(active&&d<200&&!alertedIncidents[x.id]){
    alertedIncidents[x.id]=true;
-   const msg=(x.speedLimit?'Tốc độ '+x.speedLimit+' km/h. ':'')+x.type+' phía trước, cách '+Math.round(d)+' mét.';
+   const meanings={
+    speed_limit:'Giới hạn tốc độ tối đa '+(x.speedLimit||'được báo cáo')+' ki lô mét một giờ',
+    residential_start:'Bắt đầu khu đông dân cư, cần chú ý giới hạn tốc độ',
+    residential_end:'Hết khu đông dân cư',
+    no_left_turn:'Cấm rẽ trái',no_right_turn:'Cấm rẽ phải',no_uturn:'Cấm quay đầu',
+    no_stopping:'Cấm dừng hoặc đỗ xe',speed_camera:'Có camera giám sát tốc độ',
+    traffic_light:'Phía trước có đèn tín hiệu giao thông',road_restriction:'Phía trước có đường cấm hoặc hạn chế'
+   };
+   const meaning=meanings[x.kind]||x.type;
+   const msg=meaning+'. Cách khoảng '+Math.round(d)+' mét.';
    status('⚠ '+msg);setTurnBanner(x.icon+' '+x.type,Math.round(d)+' m');speak(msg);
    try{HieuNavAndroid.vibrate()}catch(e){}
   }
@@ -1235,7 +1274,7 @@ function updatePreviewVoice(position){
  if(bestDistance<=55&&previewGuidanceStage<2){
   previewGuidanceStage=2;
   setTurnBanner('XEM TRƯỚC · '+instruction.toUpperCase(),'Còn '+Math.round(bestDistance)+' mét');
-  speak(instruction+' ngay');
+  speak(instruction);
  }
 }
 function startRoutePreview(){
@@ -1277,6 +1316,10 @@ function startRoutePreview(){
    if(previewMarker){
     previewMarker.setLatLng([c[1],c[0]]);
     const el=previewMarker.getElement()?.querySelector('#vehicleGlyph');if(el)el.style.transform='rotate('+bearing+'deg)';
+   }
+   if(typeof map.setBearing==='function'){
+    const current=map.getBearing(),delta=((bearing-current+540)%360)-180;
+    if(Math.abs(delta)>4)map.setBearing(current+Math.sign(delta)*Math.min(12,Math.abs(delta)*.25));
    }
    map.setView([c[1],c[0]],Math.max(16,map.getZoom()),{animate:true,duration:.4});
   }
