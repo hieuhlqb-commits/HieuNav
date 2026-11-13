@@ -14,6 +14,10 @@ jobs:
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      HIEUNAV_KEYSTORE_BASE64: ${{ secrets.HIEUNAV_KEYSTORE_BASE64 }}
+      HIEUNAV_STORE_PASSWORD: ${{ secrets.HIEUNAV_STORE_PASSWORD }}
+      HIEUNAV_KEY_ALIAS: ${{ secrets.HIEUNAV_KEY_ALIAS }}
+      HIEUNAV_KEY_PASSWORD: ${{ secrets.HIEUNAV_KEY_PASSWORD }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -30,7 +34,16 @@ jobs:
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
-      - name: Build debug APK
+      - name: Prepare persistent signing key
+        shell: bash
+        run: |
+          if [ -z "$HIEUNAV_KEYSTORE_BASE64" ] || [ -z "$HIEUNAV_STORE_PASSWORD" ] || [ -z "$HIEUNAV_KEY_ALIAS" ] || [ -z "$HIEUNAV_KEY_PASSWORD" ]; then
+            echo "::error::Missing GitHub Actions secrets for persistent APK signing. Add HIEUNAV_KEYSTORE_BASE64, HIEUNAV_STORE_PASSWORD, HIEUNAV_KEY_ALIAS and HIEUNAV_KEY_PASSWORD in repository Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          echo "$HIEUNAV_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/hieunav-release.jks"
+          echo "HIEUNAV_KEYSTORE_PATH=$RUNNER_TEMP/hieunav-release.jks" >> "$GITHUB_ENV"
+      - name: Build signed APK
         run: gradle --no-daemon assembleDebug
       - name: Upload APK
         uses: actions/upload-artifact@v4
