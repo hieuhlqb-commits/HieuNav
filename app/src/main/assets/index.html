@@ -122,6 +122,11 @@ body.hnav-map-dark .leaflet-control-attribution a{color:#8ecbff}
 }
 </style>
 
+
+<style>
+.hnav-3d-vehicle{z-index:9999!important;pointer-events:auto!important;display:flex!important;align-items:center!important;justify-content:center!important;overflow:visible!important}
+.hnav-3d-vehicle svg{display:block!important;overflow:visible!important;filter:drop-shadow(0 2px 3px rgba(0,0,0,.7))}
+</style>
 </head>
 <body>
 <div id="map"></div><div id="map3d" aria-label="Bản đồ 3D"></div>
@@ -214,45 +219,57 @@ let last3DCameraTarget=null,last3DCameraMoveAt=0;
 function set3DDrivingCamera(position,bearing,speed=45,duration=900){
  if(!map3dReady||!map3d||!position)return;
  const now=Date.now(),kmh=Math.max(0,Number(speed)||0);
- const zoom=kmh>=110?18.0:kmh>=85?18.25:kmh>=60?18.5:18.75;
- const pitch=kmh>=100?70:kmh>=65?73:75;
+ const zoom=kmh>=110?19.0:kmh>=85?19.2:kmh>=60?19.4:19.55;
+ const pitch=kmh>=100?80:kmh>=65?82:83;
  const target=preferredRouteBearing(position,bearing);
  const center=[position[1],position[0]],h=map3d.getContainer()?.clientHeight||window.innerHeight||800;
  let move= !last3DCameraTarget;
  if(last3DCameraTarget){
   const moved=dist([last3DCameraTarget[1],last3DCameraTarget[0]],position);
   const angle=Math.abs(((target-map3d.getBearing()+540)%360)-180);
-  move=moved>=7||angle>=7||now-last3DCameraMoveAt>=1600;
+  move=moved>=2.2||angle>=5||now-last3DCameraMoveAt>=900;
  }
  if(!move)return;
  last3DCameraTarget=center;last3DCameraMoveAt=now;
  map3d.easeTo({center,zoom,pitch,bearing:Number.isFinite(target)?target:map3d.getBearing(),
-  padding:{top:Math.round(h*.04),bottom:Math.round(h*.30)},duration:Math.max(700,duration||900),
+  padding:{top:Math.round(h*.04),bottom:Math.round(h*.30)},duration:Math.max(500,duration||650),
   easing:t=>t,essential:true});
 }
 function ensure3DVehicle(position){
- if(!map3dReady||!position||!window.maplibregl)return null;
+ if(!map3dReady||!position||!window.maplibregl||!map3d)return null;
  if(!map3dVehicleMarker){
-  const el=document.createElement('div');el.className='hnav-3d-vehicle';el.innerHTML=vehicleSvg(vehicleType);
-  el.style.width=(58*vehicleScale)+'px';el.style.height=(72*vehicleScale)+'px';el.style.cursor='pointer';el.title='Xe của bạn';
-  const svg=el.querySelector('svg');if(svg){svg.style.width=(54*vehicleScale)+'px';svg.style.height=(66*vehicleScale)+'px';}
+  const el=document.createElement('div');
+  el.className='hnav-3d-vehicle';
+  el.innerHTML=vehicleSvg(vehicleType);
+  Object.assign(el.style,{width:(70*vehicleScale)+'px',height:(82*vehicleScale)+'px',display:'flex',alignItems:'center',justifyContent:'center',zIndex:'9999',pointerEvents:'auto',position:'relative',filter:'drop-shadow(0 5px 5px rgba(0,0,0,.65))'});
+  el.title='Xe của bạn';el.setAttribute('aria-label','Vị trí xe');
+  const svg=el.querySelector('svg');
+  if(svg){Object.assign(svg.style,{width:(68*vehicleScale)+'px',height:(80*vehicleScale)+'px',display:'block',overflow:'visible'});}
   el.addEventListener('click',openVehiclePicker);
-  map3dVehicleMarker=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'viewport'}).setLngLat([position[1],position[0]]).addTo(map3d);
+  map3dVehicleMarker=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'viewport',pitchAlignment:'viewport'})
+   .setLngLat([position[1],position[0]]).addTo(map3d);
  }else{
   map3dVehicleMarker.setLngLat([position[1],position[0]]);
-  const el=map3dVehicleMarker.getElement();el.innerHTML=vehicleSvg(vehicleType);
-  const svg=el.querySelector('svg');if(svg){svg.style.width=(54*vehicleScale)+'px';svg.style.height=(66*vehicleScale)+'px';}
+  const el=map3dVehicleMarker.getElement();
+  if(el&&!el.querySelector('svg'))el.innerHTML=vehicleSvg(vehicleType);
+  if(el)Object.assign(el.style,{zIndex:'9999',display:'flex',alignItems:'center',justifyContent:'center',pointerEvents:'auto'});
+  const svg=el?.querySelector('svg');
+  if(svg)Object.assign(svg.style,{width:(68*vehicleScale)+'px',height:(80*vehicleScale)+'px',display:'block',overflow:'visible'});
  }
  return map3dVehicleMarker;
 }
 function update3DVehicle(){
- if(!map3dReady||!me)return;
+ if(!map3dReady||!map3d)return;
+ const pos=previewPosition||me;
+ if(!pos)return;
  if(!map3dIncidentMarkers.length&&incidents.length)draw3DIncidentMarkers();
- ensure3DVehicle(me);if(Number.isFinite(gpsMeta.trackHeading))map3dVehicleMarker?.setRotation(gpsMeta.trackHeading);else if(Number.isFinite(filteredHeading))map3dVehicleMarker?.setRotation(filteredHeading);
- if(is3DMode&&followVehicle&&Date.now()-lastCameraCenterAt>950){
+ const marker=ensure3DVehicle(pos);
+ const heading=previewPosition?preferredRouteBearing(pos,map3d.getBearing()):(Number.isFinite(gpsMeta.trackHeading)?gpsMeta.trackHeading:(Number.isFinite(filteredHeading)?filteredHeading:map3d.getBearing()));
+ if(Number.isFinite(heading))marker?.setRotation(heading);
+ if(is3DMode&&followVehicle&&Date.now()-lastCameraCenterAt>500){
   lastCameraCenterAt=Date.now();
-  const bearing=preferredRouteBearing(me,Number.isFinite(gpsMeta.trackHeading)?gpsMeta.trackHeading:(filteredHeading===null?map3d.getBearing():filteredHeading));
-  set3DDrivingCamera(me,bearing,smoothedSpeedKmh||45,1000);
+  const bearing=preferredRouteBearing(pos,heading);
+  set3DDrivingCamera(pos,bearing,previewPosition?(typeof previewSpeed!=='undefined'?previewSpeed:50): (smoothedSpeedKmh||45),650);
  }
 }
 function update3DRoute(){
@@ -271,8 +288,8 @@ function init3DMap(){
    container:'map3d',
    style:'https://tiles.openfreemap.org/styles/liberty',
    center:me?[me[1],me[0]]:[106.7,10.8],
-   zoom:me?18.2:5,pitch:72,bearing:0,
-   maxPitch:78, antialias:true, maxTileCacheSize:512, maxTileCacheZoomLevels:6,
+   zoom:me?19.35:5,pitch:82,bearing:0,
+   maxPitch:85, antialias:true, maxTileCacheSize:768, maxTileCacheZoomLevels:8,
    fadeDuration:0, attributionControl:true
   });
   map3d.addControl(new maplibregl.NavigationControl({showCompass:true,showZoom:true}),'top-right');
@@ -298,7 +315,7 @@ function init3DMap(){
    map3d.addLayer({id:'hnav-route-casing',type:'line',source:'hnav-route',paint:{'line-color':'#ffffff','line-width':11,'line-opacity':1}});
    map3d.addLayer({id:'hnav-route-line',type:'line',source:'hnav-route',paint:{'line-color':'#1677e8','line-width':7,'line-opacity':1,'line-blur':0}});
    map3d.addSource('hnav-car',{type:'geojson',data:{type:'Feature',geometry:{type:'Point',coordinates:me?[me[1],me[0]]:[106.7,10.8]},properties:{}}});
-   map3d.addLayer({id:'hnav-car-dot',type:'circle',source:'hnav-car',paint:{'circle-radius':9,'circle-color':'#1677e8','circle-stroke-color':'#fff','circle-stroke-width':3}});
+   map3d.addLayer({id:'hnav-car-dot',type:'circle',source:'hnav-car',paint:{'circle-radius':0,'circle-opacity':0,'circle-stroke-width':0}});
    map3d.addLayer({id:'hnav-car-label',type:'symbol',source:'hnav-car',layout:{'text-field':'','text-size':1,'text-allow-overlap':true}});
    map3d.addSource('hnav-destination',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
    map3d.addLayer({id:'hnav-destination-dot',type:'circle',source:'hnav-destination',paint:{'circle-radius':8,'circle-color':'#e53935','circle-stroke-color':'#fff','circle-stroke-width':2}});
@@ -306,9 +323,17 @@ function init3DMap(){
    map3d.addLayer({id:'hnav-preview-dot',type:'circle',source:'hnav-preview',paint:{'circle-radius':10,'circle-color':'#f59e0b','circle-stroke-color':'#fff','circle-stroke-width':3}});
    map3d.on('click',e=>openMapPointPicker({lat:e.lngLat.lat,lng:e.lngLat.lng}));
    map3dReady=true;
-    try{const layers=map3d.getStyle()?.layers||[];for(const l of layers){const id=(l.id||'').toLowerCase();if(/building|poi|housenumber|transit|airport|landuse|3d/.test(id)){try{map3d.setLayoutProperty(l.id,'visibility','none')}catch(_){}}}}catch(_){}
-    update3DRoute();update3DVehicle();
-   if(is3DMode)map3d.resize();
+    try{
+     const layers=map3d.getStyle()?.layers||[];
+     for(const l of layers){
+      const id=(l.id||'').toLowerCase(),sl=(l['source-layer']||'').toLowerCase();
+      const repeatedRoadLabel=l.type==='symbol'&&(/road|street|transportation|shield|highway|ref/.test(id+' '+sl));
+      const clutter=/building|poi|housenumber|transit|airport|landuse|3d/.test(id);
+      if(repeatedRoadLabel||clutter){try{map3d.setLayoutProperty(l.id,'visibility','none')}catch(_){}}
+     }
+    }catch(_){}
+    update3DRoute();update3DVehicle();if(me)ensure3DVehicle(previewPosition||me);
+   if(is3DMode){map3d.resize();if(me)set3DDrivingCamera(previewPosition||me,map3d.getBearing(),smoothedSpeedKmh||45,650);}
   });
   map3d.on('error',e=>{if(!map3dReady)status('Không tải được dữ liệu bản đồ 3D. Kiểm tra Internet; bản đồ 2D vẫn dùng được.')});
  }catch(e){status('Không khởi tạo được bản đồ 3D: '+e.message)}
