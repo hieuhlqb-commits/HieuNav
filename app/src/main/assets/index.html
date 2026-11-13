@@ -69,7 +69,9 @@ input[type=checkbox]{width:20px;height:20px;flex:0}
 let map,me=null,meMarker=null,routeLine=null,destinationMarker=null,limit=60,lastSpeedAlert=0;
 let routeData=null,steps=[],stepIndex=0,navigating=false,destination=null,alertFeatures=[],alertTimer=null;
 let vehicleType=localStorage.getItem('hnav_vehicle')||'🚗',voiceEnabled=localStorage.getItem('hnav_voice')!=='false';
-let trafficApiKey=localStorage.getItem('hnav_google_key')||'',lastSpokenStep=-1,trafficMode='OSRM · chưa có dữ liệu giao thông trực tiếp';
+let trafficApiKey=localStorage.getItem('hnav_google_key')||'',lastSpokenStep=-1,trafficMode='OSRM · chưa có dữ liệu giao thông trực tiếp',trafficReqNo=0,trafficResolvers={};
+window.onTrafficRouteResponse=function(json,id){const done=trafficResolvers[id];if(done){delete trafficResolvers[id];try{done(JSON.parse(json))}catch(e){done({status:'PARSE_ERROR'})}}};
+function fetchTrafficRouteNative(){return new Promise((resolve,reject)=>{const id='tr'+(++trafficReqNo);trafficResolvers[id]=resolve;try{HieuNavAndroid.requestTrafficRoute(me[0],me[1],destination[0],destination[1],trafficApiKey,id)}catch(e){delete trafficResolvers[id];reject(e)}setTimeout(()=>{if(trafficResolvers[id]){delete trafficResolvers[id];reject(new Error('Hết thời gian chờ dữ liệu giao thông'))}},20000)})};
 const prefs={speed:true,residential:true,noStop:true,noPark:true,trafficSigns:true};
 const $=id=>document.getElementById(id);
 function status(t){$('status').textContent=t}
@@ -93,6 +95,7 @@ function centerOnMe(){if(me)map.setView(me,17);else status('Chưa có vị trí 
 function setLimit(){let n=prompt('Nhập ngưỡng cảnh báo tốc độ (km/h):',limit);if(n!==null&&Number(n)>0&&Number(n)<201){limit=Number(n);$('limitBadge').textContent=limit}}
 function fmtTime(sec){let min=Math.max(1,Math.round(sec/60));if(min<60)return min+' phút';let h=Math.floor(min/60),m=min%60;return h+' giờ'+(m?' '+m+' phút':'')}
 function maneuverText(m,road){
+ if(m?.googleInstruction&&road)return road.replace(/&amp;/g,'&');
  const type=m?.type||'continue',mod=m?.modifier||'';
  const dirs={left:'rẽ trái',right:'rẽ phải',slight_left:'chếch trái',slight_right:'chếch phải',sharp_left:'rẽ gấp trái',sharp_right:'rẽ gấp phải',uturn:'quay đầu',straight:'đi thẳng'};
  let t=type==='depart'?'Bắt đầu di chuyển':type==='arrive'?'Đã đến điểm đến':type==='roundabout'?'Đi vào vòng xuyến':type==='rotary'?'Đi vào vòng xuyến':type==='merge'?'Nhập vào đường':type==='fork'?'Tại ngã rẽ':type==='on ramp'?'Đi vào đường dẫn':type==='off ramp'?'Ra khỏi đường dẫn':type==='end of road'?'Cuối đường,':type==='new name'?'Tiếp tục đi':type==='continue'?'Tiếp tục đi':type;
@@ -115,13 +118,12 @@ async function searchRoute(){
   let routeGeometry,routeDistance,routeDuration,routeSteps;
   if(trafficApiKey){
    status('Đang tính tuyến với Google Maps và tình hình giao thông…');
-   const gu='https://maps.googleapis.com/maps/api/directions/json?origin='+encodeURIComponent(me[0]+','+me[1])+'&destination='+encodeURIComponent(destination[0]+','+destination[1])+'&mode=driving&departure_time=now&traffic_model=best_guess&language=vi&key='+encodeURIComponent(trafficApiKey);
-   const gr=await fetch(gu);const gd=await gr.json();
+   const gd=await fetchTrafficRouteNative();
    if(gd.status!=='OK'||!gd.routes?.length)throw new Error('Google Maps không trả được tuyến giao thông: '+(gd.error_message||gd.status));
    const leg=gd.routes[0].legs[0];
    routeGeometry={type:'LineString',coordinates:decodePolyline(gd.routes[0].overview_polyline.points)};
    routeDistance=leg.distance.value;routeDuration=(leg.duration_in_traffic||leg.duration).value;
-   routeSteps=leg.steps.map(s=>({distance:s.distance.value,duration:s.duration.value,name:s.html_instructions.replace(/<[^>]*>/g,' ').replace(/&nbsp;/g,' '),maneuver:{type:'continue',modifier:'',location:[s.end_location.lng,s.end_location.lat]}}));
+   routeSteps=leg.steps.map(s=>({distance:s.distance.value,duration:s.duration.value,name:s.html_instructions.replace(/<[^>]*>/g,' ').replace(/&nbsp;/g,' '),maneuver:{type:'google',modifier:'',location:[s.end_location.lng,s.end_location.lat],googleInstruction:true}}));
    trafficMode='Google Maps · thời gian có xét giao thông';
   }else{
    const url='https://router.project-osrm.org/route/v1/driving/'+me[1]+','+me[0]+';'+destination[1]+','+destination[0]+'?overview=full&geometries=geojson&steps=true';
