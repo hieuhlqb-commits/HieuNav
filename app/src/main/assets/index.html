@@ -9,7 +9,7 @@
 :root{--blue:#1677e8;--panel:#101923f2;--muted:#aebdca}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;font-family:Roboto,Arial,sans-serif;background:#101820;color:#fff;overflow:hidden}
-#map{position:absolute;inset:0;z-index:1}
+#map,#map3d{position:absolute;inset:0;z-index:1}#map3d{display:none;background:#dce6ed}
 .top{position:absolute;z-index:500;top:12px;left:12px;right:12px;display:flex;gap:8px}
 input{min-width:0;flex:1;padding:14px;border:0;border-radius:13px;background:#fff;color:#111;font-size:16px}
 button{border:0;border-radius:12px;padding:11px 13px;background:var(--blue);color:white;font-weight:700;font-size:13px}
@@ -21,7 +21,7 @@ button{border:0;border-radius:12px;padding:11px 13px;background:var(--blue);colo
 .speed-widget{left:10px;top:145px}.limit-widget{left:10px;top:225px;text-align:center}.eta-widget{right:10px;top:145px;text-align:right}
 .widget-head{font-size:11px;font-weight:800;color:#405365;display:flex;align-items:center;gap:3px;justify-content:space-between}
 .widget-number{font-size:22px;line-height:1.15;font-weight:800}.widget-number small,.eta-widget small,.widget-unit{font-size:10px;font-weight:500;color:#405365}
-.limit-widget .limitCircle{width:43px;height:43px;border-width:4px;font-size:18px;margin:4px auto 0}
+.limit-widget .limitCircle{width:56px;height:56px;border:6px solid #d9232e;border-radius:50%;background:#fff;color:#111;font-size:22px;font-weight:900;display:grid;place-items:center;margin:4px auto 0;box-shadow:0 1px 3px #0002}
 .tiny{padding:1px 5px;border-radius:6px;background:#dce6ef;color:#18334a;font-size:12px;min-width:19px}
 .float-actions{right:10px;bottom:150px;display:flex;flex-direction:column;gap:7px}
 .round-action{width:43px;height:43px;border-radius:50%;padding:0;background:rgba(255,255,255,.9);color:#17334b;border:1px solid #9aabba;font-size:18px;box-shadow:0 2px 8px #0002}
@@ -33,6 +33,7 @@ button{border:0;border-radius:12px;padding:11px 13px;background:var(--blue);colo
 .float-preview button{font-size:12px;font-weight:800}
 .map-status{left:10px;right:10px;bottom:calc(108px + env(safe-area-inset-bottom,0px));max-width:75%;font-size:10px;color:#23384a;background:rgba(255,255,255,.78);padding:4px 7px;border-radius:7px;white-space:normal}
 .hnav-compact .float-widget,.hnav-compact .float-actions,.hnav-compact .float-dock,.hnav-compact .float-preview,.hnav-compact .map-status{opacity:0;pointer-events:none}
+.hnav-compact .float-preview button:last-child{opacity:1;pointer-events:auto}
 #bottom .dragging{opacity:.82;outline:2px dashed #1677e8}
 .sheet{display:none;position:absolute;z-index:520;left:10px;right:10px;bottom:calc(125px + env(safe-area-inset-bottom,0px));max-height:42vh;overflow:auto;background:rgba(255,255,255,.96);color:#172533;border:1px solid #aab9c7;border-radius:16px;padding:13px;box-shadow:0 4px 20px #0003}
 .sheet .sheetHead,.sheet .item,.sheet .subtle{color:#172533}.sheet .item{border-color:#d5dfe8}
@@ -40,7 +41,19 @@ button{border:0;border-radius:12px;padding:11px 13px;background:var(--blue);colo
 .top input{box-shadow:0 2px 8px #0002}
 @media(max-height:650px){.speed-widget{top:125px}.limit-widget{top:195px}.float-actions{bottom:130px}.float-preview{bottom:calc(57px + env(safe-area-inset-bottom,0px))}.map-status{bottom:calc(100px + env(safe-area-inset-bottom,0px))}}
 .leaflet-control-attribution{font-size:9px!important}
-.vehicle-marker{display:block;transform-origin:50% 50%;font-size:29px;line-height:34px;text-shadow:0 1px 5px #000;will-change:transform}
+.vehicle-marker-wrap{background:transparent;border:0}
+.vehicle-marker{width:54px;height:66px;display:grid;place-items:center;transform-origin:50% 50%;filter:drop-shadow(0 5px 4px #07152288);will-change:transform}
+.vehicle-marker svg{width:54px;height:66px;overflow:visible}
+.vehicle-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px}
+.vehicle-choice{min-height:112px!important;margin:0!important;padding:9px!important;border:1px solid #cbd6df!important;border-radius:14px!important;background:linear-gradient(160deg,#fff,#edf3f8)!important;color:#183047!important;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center!important}
+.vehicle-choice.selected{border:2px solid #1677e8!important;background:linear-gradient(160deg,#eaf4ff,#dcecff)!important;box-shadow:0 2px 9px #1677e833}
+.vehicle-choice svg{width:54px;height:65px;filter:drop-shadow(0 3px 3px #0003)}
+.vehicle-choice small{font-size:11px;color:#526679}
+#map .leaflet-tile{filter:saturate(1.13) contrast(1.025)}
+#map3d{background:linear-gradient(#b9d2e4,#e7edf0)}
+.leaflet-control-attribution{background:#ffffffc9!important;border-radius:6px;padding:2px 5px!important}
+
+.incident-sign-wrap{background:transparent;border:0}.incident-sign{width:32px;height:32px;border:2px solid #fff;border-radius:9px;background:#fff;box-shadow:0 2px 6px #0006;display:grid;place-items:center;font-size:21px}
 #driveChoice{display:none;position:absolute;z-index:900;inset:0;background:#07111bb8;align-items:center;justify-content:center;padding:22px}
 #driveChoice .choice-card{width:min(100%,390px);background:#f8fbff;color:#172533;border-radius:18px;padding:16px;box-shadow:0 8px 30px #0005}
 #driveChoice h3{margin:0 0 8px;font-size:18px}#driveChoice p{font-size:13px;line-height:1.45;color:#425466}
@@ -48,7 +61,7 @@ button{border:0;border-radius:12px;padding:11px 13px;background:var(--blue);colo
 #driveChoice .choice-cancel{background:#526273;text-align:center}
 #laneHint{display:none;position:absolute;z-index:515;top:132px;left:12px;right:12px;max-width:520px;margin:auto;background:#102b48ed;color:white;border:1px solid #4388ce;border-radius:12px;padding:9px 12px;font-size:13px;box-shadow:0 3px 14px #0004}
 #laneHint strong{display:block;font-size:14px;margin-bottom:3px}
-#guidanceAlert{display:none;position:absolute;z-index:880;right:12px;top:138px;background:#c62828;color:#fff;border:2px solid #fff;border-radius:28px;padding:11px 16px;font-size:14px;font-weight:800;box-shadow:0 3px 14px #0005;max-width:72%;pointer-events:auto}
+#guidanceAlert{display:none;position:absolute;z-index:880;right:12px;top:245px;width:58px;height:58px;padding:0;border-radius:50%;background:#c62828;color:#fff;border:3px solid #fff;font-size:25px;font-weight:900;box-shadow:0 3px 14px #0006;pointer-events:auto}
 #guidanceDialog,#mapPickDialog{display:none;position:absolute;z-index:950;inset:0;background:#07111bb8;align-items:center;justify-content:center;padding:20px}
 .dialog-card{width:min(100%,390px);max-height:72vh;overflow:auto;background:#fff;color:#172533;border-radius:18px;padding:16px;box-shadow:0 8px 30px #0006}
 .dialog-card h3{margin:0 0 8px;font-size:18px}.dialog-card p{font-size:13px;line-height:1.45;color:#425466}
@@ -61,12 +74,12 @@ button{border:0;border-radius:12px;padding:11px 13px;background:var(--blue);colo
 </style>
 </head>
 <body>
-<div id="map"></div>
-<button id="followMe" onclick="toggleFollow(true)" style="position:absolute;z-index:510;right:14px;top:82px;border-radius:50%;width:48px;height:48px;padding:0;background:#fff;color:#145ca8;font-size:22px;box-shadow:0 2px 10px #0006" title="Về vị trí của tôi">◎</button>
+<div id="map"></div><div id="map3d" aria-label="Bản đồ 3D"></div>
+
 <div class="top"><input id="destination" placeholder="Nhập địa điểm cần đến"><button onclick="searchRoute()">TÌM</button></div>
 <div id="turnBanner"><div id="turnMain">Sẵn sàng dẫn đường</div><div id="turnSub">Tìm điểm đến để tính lộ trình</div></div>
 <div id="laneHint"><strong id="laneMain">Hỗ trợ làn đường</strong><span id="laneSub">Thông tin làn đường sẽ xuất hiện khi có lộ trình và dữ liệu phù hợp.</span></div>
-<button id="guidanceAlert" onclick="openGuidanceDetails()">⚠ THÔNG BÁO DẪN ĐƯỜNG</button>
+<button id="guidanceAlert" onclick="openGuidanceDetails()">⚠</button>
 <div id="guidanceDialog" onclick="if(event.target.id==='guidanceDialog')closeGuidanceDetails()"><div class="dialog-card"><h3>Thông tin dẫn đường</h3><div id="guidanceFull"></div><button class="cancel" onclick="closeGuidanceDetails()">Đóng</button></div></div>
 <div id="mapPickDialog" onclick="if(event.target.id==='mapPickDialog')closeMapPick()"><div class="dialog-card"><h3>Điểm trên bản đồ</h3><p id="mapPickAddress">Đang xác định địa điểm…</p><button class="success" onclick="useMapPointAsDestination()">Đặt làm điểm đến</button><button onclick="addMapPointAsStop()">＋ Thêm làm điểm ghé</button><div id="viaList"></div><button class="cancel" onclick="closeMapPick()">Đóng</button></div></div>
 <div id="driveChoice" onclick="if(event.target.id==='driveChoice')closeDriveChoice()">
@@ -108,19 +121,20 @@ button{border:0;border-radius:12px;padding:11px 13px;background:var(--blue);colo
  <div class="float-preview">
   <button onclick="startRoutePreview()" title="Xem trước tuyến">▶</button>
   <button onclick="stopRoutePreview()" title="Dừng xem trước">■</button>
-  <button onclick="toggleMapPerspective()" title="Bật/tắt phối cảnh 2.5D">2.5D</button>
-  <button onclick="toggleCompactUI()" title="Ẩn/hiện điều khiển">☰</button>
+  <button onclick="toggleReal3D()" title="Bật/tắt bản đồ 3D thật">3D</button>
+  <button onclick="toggleCompactUI()" title="Hiện điều khiển">☰</button>
  </div>
  <div id="status" class="map-status">Đang tải bản đồ…</div>
  <div id="gpsDetails" hidden>GPS: đang chờ tín hiệu · Độ chính xác: -- m · Hướng: --</div>
  <div id="etaDetails" hidden>Giờ đến dự kiến: -- · Có tính dự phòng</div>
 </div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js'"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js'"></script><script src="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.js"></script>
 <script>
 'use strict';
 let map,me=null,meMarker=null,routeLine=null,destinationMarker=null,mapInitStarted=false;
 let limit=Number(localStorage.getItem('hnav_limit')||60),routeData=null,steps=[],stepIndex=0,navigating=false,destination=null,lastSpeedAlert=0,lastSpokenStep=-1;
-let vehicleType=localStorage.getItem('hnav_vehicle')||'🚗',voiceEnabled=localStorage.getItem('hnav_voice')!=='false';
+let vehicleType=localStorage.getItem('hnav_vehicle')||'car',voiceEnabled=localStorage.getItem('hnav_voice')!=='false';
+let map3d=null,map3dReady=false,is3DMode=false,car3DMarker=null;
 let prefs={speed:true,incidents:true,autoReroute:true};
 let incidents=JSON.parse(localStorage.getItem('hnav_incidents')||'[]');
 let incidentLayer=null,alertedIncidents={},routeCoords=[],previewMarker=null,previewTimer=null,previewIndex=0,gpsMeta={};
@@ -130,25 +144,139 @@ let viaPoints=[],viaMarkers=[],pendingMapPoint=null,guidanceTimer=null,guidanceT
 const $=id=>document.getElementById(id);
 function status(t){const e=$('status');if(e)e.textContent=t}
 function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+function geoPoint(coord){
+ return {type:'Feature',geometry:{type:'Point',coordinates:[coord[1],coord[0]]},properties:{}};
+}
+function update3DVehicle(){
+ if(!map3dReady||!me)return;
+ if(!map3dVehicleMarker){
+  const el=document.createElement('div');
+  el.className='hnav-3d-vehicle';
+  el.innerHTML=vehicleSvg(vehicleType);
+  el.style.width='58px';el.style.height='72px';
+  map3dVehicleMarker=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'})
+   .setLngLat([me[1],me[0]]).addTo(map3d);
+ }else{
+  map3dVehicleMarker.setLngLat([me[1],me[0]]);
+  const el=map3dVehicleMarker.getElement();el.innerHTML=vehicleSvg(vehicleType);
+ }
+ if(is3DMode&&followVehicle){
+  const bearing=(deviceHeading!==null?deviceHeading:(Number.isFinite(gpsMeta.heading)?gpsMeta.heading:map3d.getBearing()));
+  map3d.easeTo({center:[me[1],me[0]],zoom:Math.max(map3d.getZoom(),16),pitch:64,bearing,duration:420});
+ }
+}
+function update3DRoute(){
+ if(!map3dReady)return;
+ const features=[];
+ if(routeCoords?.length>1)features.push({type:'Feature',geometry:{type:'LineString',coordinates:routeCoords},properties:{}});
+ map3d.getSource('hnav-route')?.setData({type:'FeatureCollection',features});
+ const destFeatures=destination? [geoPoint(destination)] : [];
+ map3d.getSource('hnav-destination')?.setData({type:'FeatureCollection',features:destFeatures});
+}
+function init3DMap(){
+ if(map3d||!window.maplibregl)return;
+ try{
+  map3d=new maplibregl.Map({
+   container:'map3d',
+   style:'https://tiles.openfreemap.org/styles/liberty',
+   center:me?[me[1],me[0]]:[106.7,10.8],
+   zoom:me?16:5,pitch:64,bearing:0,
+   maxPitch:75, attributionControl:true
+  });
+  map3d.addControl(new maplibregl.NavigationControl({showCompass:true,showZoom:true}),'top-right');
+  map3d.on('load',()=>{
+   const style=map3d.getStyle(), sourceId=Object.keys(style.sources||{}).find(k=>style.sources[k].type==='vector');
+   if(sourceId){
+    const firstSymbol=(style.layers||[]).find(l=>l.type==='symbol')?.id;
+    try{
+     map3d.addLayer({
+      id:'hnav-3d-buildings',source:sourceId,'source-layer':'building',type:'fill-extrusion',
+      minzoom:14,
+      filter:['!=',['get','hide_3d'],true],
+      paint:{
+       'fill-extrusion-color':['interpolate',['linear'],['coalesce',['to-number',['get','render_height']],8],0,'#dce4eb',20,'#b8c8d5',60,'#91a7b8',120,'#7d93a6'],
+       'fill-extrusion-height':['max',2,['coalesce',['to-number',['get','render_height']],8]],
+       'fill-extrusion-base':['coalesce',['to-number',['get','render_min_height']],0],
+       'fill-extrusion-opacity':0.92
+      }
+     },firstSymbol);
+    }catch(e){status('Bản đồ 3D đã tải nhưng lớp nhà 3D không có trong khu vực/dữ liệu hiện tại.')}
+   }
+   map3d.addSource('hnav-route',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+   map3d.addLayer({id:'hnav-route-casing',type:'line',source:'hnav-route',paint:{'line-color':'#ffffff','line-width':10,'line-opacity':.9}});
+   map3d.addLayer({id:'hnav-route-line',type:'line',source:'hnav-route',paint:{'line-color':'#1677e8','line-width':6,'line-opacity':1,'line-blur':.2}});
+   map3d.addSource('hnav-car',{type:'geojson',data:{type:'Feature',geometry:{type:'Point',coordinates:me?[me[1],me[0]]:[106.7,10.8]},properties:{}}});
+   map3d.addLayer({id:'hnav-car-dot',type:'circle',source:'hnav-car',paint:{'circle-radius':9,'circle-color':'#1677e8','circle-stroke-color':'#fff','circle-stroke-width':3}});
+   map3d.addLayer({id:'hnav-car-label',type:'symbol',source:'hnav-car',layout:{'text-field':'','text-size':1,'text-allow-overlap':true}});
+   map3d.addSource('hnav-destination',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+   map3d.addLayer({id:'hnav-destination-dot',type:'circle',source:'hnav-destination',paint:{'circle-radius':8,'circle-color':'#e53935','circle-stroke-color':'#fff','circle-stroke-width':2}});
+   map3d.addSource('hnav-preview',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+   map3d.addLayer({id:'hnav-preview-dot',type:'circle',source:'hnav-preview',paint:{'circle-radius':10,'circle-color':'#f59e0b','circle-stroke-color':'#fff','circle-stroke-width':3}});
+   map3d.on('click',e=>openMapPointPicker({lat:e.lngLat.lat,lng:e.lngLat.lng}));
+   map3dReady=true;update3DVehicle();update3DRoute();
+   if(is3DMode)map3d.resize();
+  });
+  map3d.on('error',e=>{if(!map3dReady)status('Không tải được dữ liệu bản đồ 3D. Kiểm tra Internet; bản đồ 2D vẫn dùng được.')});
+ }catch(e){status('Không khởi tạo được bản đồ 3D: '+e.message)}
+}
+function toggleReal3D(){
+ if(!window.maplibregl){status('Thư viện bản đồ 3D chưa tải được.');return}
+ init3DMap();
+ if(!map3d){status('Đang khởi tạo bản đồ 3D…');return}
+ is3DMode=!is3DMode;
+ $('map3d').style.display=is3DMode?'block':'none';
+ $('map').style.display=is3DMode?'none':'block';
+ if(is3DMode){
+  if(map3dReady){map3d.resize();if(me)map3d.jumpTo({center:[me[1],me[0]],zoom:Math.max(map3d.getZoom(),16),pitch:64});update3DRoute();update3DVehicle()}
+  status('Đã bật bản đồ 3D vector. Nhà 3D phụ thuộc dữ liệu bản đồ tại khu vực.');
+ }else{map?.invalidateSize(true);status('Đã trở về bản đồ 2D.')}
+}
 function init(){
  if(mapInitStarted)return;
  if(!window.L){status('Không tải được thư viện bản đồ Leaflet. Kiểm tra Internet rồi tải lại ứng dụng.');return}
  mapInitStarted=true;
  try{
  map=L.map('map',{zoomControl:false}).setView([16,108],6);
- const tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'});
+ const tiles=L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:20,attribution:'© OpenStreetMap © CARTO'});
  let tileLoaded=false,tileErrors=0;
  tiles.on('tileload',()=>{tileLoaded=true;status('Bản đồ đã tải. Đang chờ GPS.')});
  tiles.on('tileerror',()=>{tileErrors++;if(!tileLoaded&&tileErrors>=3)status('Không tải được ảnh bản đồ. Kiểm tra kết nối Internet hoặc máy chủ bản đồ.')});
  tiles.addTo(map);
  map.whenReady(()=>{setTimeout(()=>map.invalidateSize(true),350);status('Bản đồ đang khởi tạo…')});
- drawIncidentMarkers();installMapBrowseBehavior();setFollowButton(true);map.on('click',e=>openMapPointPicker(e.latlng));
+ drawIncidentMarkers();installMapBrowseBehavior();setFollowButton(true);refreshRoadRuleStatus();map.on('click',e=>openMapPointPicker(e.latlng));
  if(navigator.geolocation)navigator.geolocation.watchPosition(p=>{
   const c=p.coords;hieuNavUpdateLocation(c.latitude,c.longitude,c.speed||0,{accuracy:c.accuracy,altitude:c.altitude,heading:c.heading,timestamp:p.timestamp});
  },e=>status('Không lấy được GPS: '+e.message),{enableHighAccuracy:true,maximumAge:1500,timeout:15000});
  }catch(err){mapInitStarted=false;status('Lỗi khởi tạo bản đồ: '+err.message)}
 }
-function vehicleIcon(){return L.divIcon({className:'vehicle-marker-wrap',html:'<div id="vehicleGlyph" class="vehicle-marker" style="transform:rotate(0deg)">'+vehicleType+'</div>',iconSize:[38,38],iconAnchor:[19,19]})}
+function vehicleEmoji(){return ({car:'🚙',taxi:'🚕',van:'🚐',truck:'🚚',motorcycle:'🏍️'})[vehicleType]||'🚙'}
+function vehicleLabel(){return ({car:'SUV / VinFast VF5',taxi:'Taxi',van:'Xe van',truck:'Xe tải',motorcycle:'Xe máy'})[vehicleType]||'SUV / VinFast VF5'}
+function vehicleSvg(type){
+ const body=type==='truck'?'M17 7 H43 L49 18 V52 H11 V18 Z':
+  type==='van'?'M15 8 H45 Q49 8 49 14 V54 H11 V14 Q11 8 15 8Z':
+  type==='motorcycle'?'M29 5 C20 10 18 21 20 31 L15 48 Q15 57 29 61 Q43 57 43 48 L38 31 C40 21 38 10 29 5Z':
+  type==='taxi'?'M15 10 Q15 6 20 6 H38 Q43 6 43 10 L49 22 V49 Q49 56 42 56 H16 Q9 56 9 49 V22Z':
+  'M15 10 Q15 5 21 5 H37 Q43 5 43 10 L49 23 V49 Q49 56 42 56 H16 Q9 56 9 49 V23Z';
+ const windows=type==='truck'?
+  '<path d="M18 11 H41 L45 21 H14Z" fill="#9ed6ed" stroke="#426174" stroke-width="1.2"/><path d="M14 25 H46 V47 H14Z" fill="#d8e1e8"/>':
+  type==='motorcycle'?
+  '<path d="M24 16 Q29 11 34 16 L36 29 H22Z" fill="#263d50"/><path d="M23 37 H35 L39 48 H19Z" fill="#d9e8ef"/>':
+  '<path d="M17 17 Q17 12 22 12 H36 Q41 12 41 17 L44 27 H14Z" fill="#9ed8ed" stroke="#48677b" stroke-width="1.2"/><path d="M14 31 H44 V44 H14Z" fill="#d9e6ed"/>';
+ return `<svg viewBox="0 0 58 70" xmlns="http://www.w3.org/2000/svg" aria-label="${vehicleLabel()}">
+ <defs><linearGradient id="carPaint" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${type==='taxi'?'#fff4a8':type==='truck'?'#f4f7fb':type==='motorcycle'?'#ff6b45':'#8fd4ff'}"/><stop offset=".48" stop-color="${type==='taxi'?'#f5c928':type==='truck'?'#9baebe':type==='motorcycle'?'#c72d25':'#1677e8'}"/><stop offset="1" stop-color="${type==='taxi'?'#b78312':type==='truck'?'#536b80':type==='motorcycle'?'#751c24':'#073f89'}"/></linearGradient></defs>
+ <ellipse cx="29" cy="36" rx="23" ry="31" fill="#071522" opacity=".25"/>
+ <g fill="#17212b"><rect x="7" y="18" width="7" height="13" rx="2"/><rect x="44" y="18" width="7" height="13" rx="2"/><rect x="7" y="43" width="7" height="13" rx="2"/><rect x="44" y="43" width="7" height="13" rx="2"/></g>
+ <path d="${body}" fill="url(#carPaint)" stroke="#20384d" stroke-width="1.6"/>
+ ${windows}
+ <path d="M15 28 H43 M15 46 H43" stroke="#ffffff" stroke-opacity=".45" stroke-width="1.2"/>
+ <path d="M13 14 L18 10 M45 14 L40 10" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+ <path d="M17 51 L22 54 H36 L41 51" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="1.4"/>
+ ${type==='taxi'?'<rect x="22" y="4" width="14" height="7" rx="2" fill="#fff" stroke="#9c7412"/><text x="29" y="9.5" text-anchor="middle" font-size="4.5" font-weight="bold" fill="#333">TAXI</text>':''}
+ ${type==='motorcycle'?'<circle cx="29" cy="7" r="3" fill="#f7e7a5" stroke="#26394b"/><circle cx="29" cy="61" r="4" fill="#18232d"/>':''}
+ </g></svg>`;
+}
+function vehicleIcon(){return L.divIcon({className:'vehicle-marker-wrap',html:'<div id="vehicleGlyph" class="vehicle-marker" style="transform:rotate(0deg)">'+vehicleSvg(vehicleType)+'</div>',iconSize:[54,66],iconAnchor:[27,33]})}
 
 function bearingBetween(a,b){
  const toRad=x=>x*Math.PI/180,toDeg=x=>x*180/Math.PI;
@@ -230,7 +358,7 @@ async function enableDriveAssist(){
 function hieuNavUpdateLocation(lat,lon,speed,meta={}){
  gpsMeta=meta||{};me=[lat,lon];let s=Math.max(0,Math.round((speed||0)*3.6));$('speed').textContent=s;
  $('gpsDetails').textContent='GPS: '+lat.toFixed(5)+', '+lon.toFixed(5)+' · Độ chính xác: '+(Number.isFinite(gpsMeta.accuracy)?Math.round(gpsMeta.accuracy):'--')+' m · Hướng: '+(Number.isFinite(gpsMeta.heading)?Math.round(gpsMeta.heading)+'°':'--')+(Number.isFinite(gpsMeta.altitude)?' · Cao độ: '+Math.round(gpsMeta.altitude)+' m':'');
- if(!meMarker){meMarker=L.marker(me,{icon:vehicleIcon()}).addTo(map);map.setView(me,16)}else meMarker.setLatLng(me);updateVehicleHeading();
+ if(!meMarker){meMarker=L.marker(me,{icon:vehicleIcon(),keyboard:true,title:'Chạm để đổi kiểu xe'}).addTo(map);meMarker.on('click',openVehiclePicker);map.setView(me,16)}else meMarker.setLatLng(me);updateVehicleHeading();update3DVehicle();refreshRoadRuleStatus();
  if(followVehicle&&map){if(map.getZoom()<15)map.setZoom(16);map.panTo(me,{animate:true,duration:.25})}
  if(prefs.speed&&s>limit&&Date.now()-lastSpeedAlert>12000){lastSpeedAlert=Date.now();status('CẢNH BÁO: Vượt ngưỡng tốc độ đã đặt.');speak('Cảnh báo vượt tốc độ');}
  if(navigating){updateNavigationProgress();checkOffRouteAndReroute()}
@@ -398,31 +526,166 @@ function renderRouteSheet(){
  steps.forEach((s,i)=>h+='<div class="item"><strong>'+(i+1)+'. '+escapeHtml(maneuverText(s))+'</strong><span class="subtle">'+((s.distance||0)/1000).toFixed(2)+' km</span></div>')}
  $('sheet').innerHTML=h;
 }
+
 function saveIncidents(){localStorage.setItem('hnav_incidents',JSON.stringify(incidents))}
+function currentLocalMinutes(){const d=new Date();return d.getHours()*60+d.getMinutes()}
+function ruleAppliesNow(x){
+ const now=Date.now();
+ if(x.expires && now>x.expires)return false;
+ if(x.validFrom && now<new Date(x.validFrom).getTime())return false;
+ if(x.validTo && now>new Date(x.validTo).getTime())return false;
+ if(Array.isArray(x.weekdays)&&x.weekdays.length&&!x.weekdays.includes(new Date().getDay()))return false;
+ if(x.startTime&&x.endTime){
+  const [sh,sm]=x.startTime.split(':').map(Number),[eh,em]=x.endTime.split(':').map(Number);
+  const n=currentLocalMinutes(),a=sh*60+sm,b=eh*60+em;
+  const inTime=a<=b?(n>=a&&n<=b):(n>=a||n<=b);
+  if(!inTime)return false;
+ }
+ const v=vehicleType==='motorcycle'?'motorcycle':vehicleType;
+ if(Array.isArray(x.vehicleTypes)&&x.vehicleTypes.length&&!x.vehicleTypes.includes(v))return false;
+ return true;
+}
+function roadRuleMatchesPosition(x,point){
+ if(!point)return false;
+ const radius=Number(x.radiusMeters||35);
+ if(dist(point,[x.lat,x.lon])>radius)return false;
+ // Direction-specific records are only enforced when heading is known.
+ if(x.directionBearing!==undefined&&Number.isFinite(gpsMeta.heading)){
+  const delta=Math.abs(((gpsMeta.heading-x.directionBearing+540)%360)-180);
+  if(delta>75)return false;
+ }
+ return true;
+}
+function getActiveRoadRules(){
+ if(!me)return [];
+ return incidents.filter(x=>x.ruleType&&ruleAppliesNow(x)&&roadRuleMatchesPosition(x,me));
+}
+function refreshRoadRuleStatus(){
+ const active=getActiveRoadRules();
+ const speedRules=active.filter(x=>/tốc độ|speed/i.test(x.type));
+ const residential=active.filter(x=>x.kind==='residential_start'||x.kind==='residential_end');
+ const parts=[];
+ if(speedRules.length)parts.push('Tốc độ theo báo cáo: '+(speedRules[speedRules.length-1].speedLimit||'chưa rõ')+' km/h');
+ if(residential.length)parts.push(residential[residential.length-1].kind==='residential_start'?'Khu đông dân cư (theo dữ liệu đã lưu)':'Đã qua điểm hết khu đông dân cư');
+ const el=$('roadRuleStatus');
+ if(el)el.textContent=parts.length?parts.join(' · '):'Chưa có quy tắc đủ căn cứ tại vị trí này';
+}
+
+const INCIDENT_TYPES=[
+ {type:'Cấm dừng / cấm đỗ',icon:'🚫',kind:'restriction'},
+ {type:'Có camera giám sát',icon:'📷',kind:'camera'},
+ {type:'Bắt đầu khu đông dân cư',icon:'R.420',kind:'residential_start'},
+ {type:'Hết khu đông dân cư',icon:'R.421',kind:'residential_end'},
+ {type:'Cấm vượt',icon:'🚷',kind:'no_overtaking'},
+ {type:'Giới hạn tốc độ',icon:'🔴',kind:'speed_limit'},
+ {type:'Đường ngập',icon:'🌊',kind:'flood'},
+ {type:'Ổ gà / đường hư hỏng',icon:'⚠️',kind:'road_damage'},
+ {type:'Đường bị chặn / cấm',icon:'⛔',kind:'road_closed'},
+ {type:'Tai nạn / ùn tắc',icon:'🚧',kind:'traffic'},
+ {type:'Hạn chế tải trọng / chiều cao',icon:'🚛',kind:'height_weight'},
+ {type:'Trạm thu phí / giá vé',icon:'💰',kind:'toll'},
+ {type:'Biển báo khác',icon:'🪧',kind:'other'}
+];
+function residentialSignSvg(end=false){
+ const slash=end?'<path d="M8 88 L88 8" stroke="#e3262e" stroke-width="9" />':'';
+ return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="48" height="48" aria-label="'+(end?'Biển R.421 hết khu đông dân cư':'Biển R.420 bắt đầu khu đông dân cư')+'">'+
+ '<rect x="3" y="3" width="90" height="90" rx="3" fill="#0876bd" stroke="#fff" stroke-width="3"/>'+
+ '<g fill="#fff">'+
+ '<path d="M13 65V43h13V30h14v35z"/>'+
+ '<path d="M42 65V20h17v45z"/>'+
+ '<path d="M61 65V36h11V25h12v40z"/>'+
+ '<path d="M9 66h78v8H9z"/>'+
+ '<rect x="18" y="48" width="4" height="6" fill="#0876bd"/><rect x="31" y="38" width="4" height="6" fill="#0876bd"/>'+
+ '<rect x="48" y="27" width="5" height="7" fill="#0876bd"/><rect x="48" y="40" width="5" height="7" fill="#0876bd"/>'+
+ '<rect x="66" y="43" width="4" height="6" fill="#0876bd"/><rect x="76" y="32" width="4" height="6" fill="#0876bd"/>'+
+ '</g>'+slash+'</svg>';
+}
+function incidentMarkerIcon(x){
+ const kind=x.kind||INCIDENT_TYPES.find(t=>t.type===x.type)?.kind;
+ if(kind==='residential_start'||kind==='residential_end'){
+  const svg=residentialSignSvg(kind==='residential_end');
+  return L.divIcon({className:'incident-sign-wrap residential-sign',html:svg,iconSize:[52,52],iconAnchor:[26,26]});
+ }
+ const ico=x.icon||INCIDENT_TYPES.find(t=>t.type===x.type)?.icon||'⚠️';
+ return L.divIcon({className:'incident-sign-wrap',html:'<div class="incident-sign">'+escapeHtml(ico)+'</div>',iconSize:[36,36],iconAnchor:[18,18]});
+}
+
+// Báo cáo không cần quyền quản trị. Năm báo cáo cùng loại, gần cùng vị trí
+// và trong 24 giờ sẽ được tự động đánh dấu là có nhiều xác nhận.
+function duplicateReportGroup(item){
+ const now=Date.now(), radius=100, windowMs=24*60*60*1000;
+ return incidents.filter(x=>{
+  if(x.expires<=now || x.type!==item.type || now-(x.created||0)>windowMs)return false;
+  return dist([item.lat,item.lon],[x.lat,x.lon])<=radius;
+ });
+}
+function refreshDuplicateConsensus(){
+ let changed=false;
+ incidents.forEach(item=>{
+  const matches=duplicateReportGroup(item), count=matches.length;
+  const old=item.confirmationCount||0;
+  item.confirmationCount=count;
+  if(count>=5){
+   const next='Được xác nhận bởi '+count+' báo cáo trùng khớp';
+   if(item.status!==next){item.status=next;changed=true}
+  }else if((item.status||'').startsWith('Được xác nhận bởi ')){
+   item.status='Chưa đủ xác nhận';changed=true;
+  }
+  if(old!==count)changed=true;
+ });
+ if(changed)saveIncidents();
+}
+function adminIncidentAction(id,action){
+ const pass=prompt('Mật khẩu quản trị viên (tạm thời):');
+ if(pass===null)return;
+ if(pass!=='4321'){alert('Mật khẩu không đúng.');return}
+ const item=incidents.find(x=>String(x.id)===String(id));
+ if(!item){alert('Không tìm thấy báo cáo.');return}
+ if(action==='delete'){
+  if(!confirm('Xóa báo cáo "'+item.type+'"?'))return;
+  incidents=incidents.filter(x=>String(x.id)!==String(id));
+ }else{
+  const oldType=INCIDENT_TYPES.findIndex(t=>t.type===item.type);
+  const choice=prompt('SỬA LOẠI BÁO CÁO:\n'+INCIDENT_TYPES.map((t,i)=>(i+1)+'. '+t.icon+' '+t.type).join('\n'),String(oldType+1));
+  const n=Number(choice)-1;if(!Number.isInteger(n)||n<0||n>=INCIDENT_TYPES.length)return;
+  const note=prompt('Sửa ghi chú:',item.note||'');if(note===null)return;
+  item.type=INCIDENT_TYPES[n].type;item.icon=INCIDENT_TYPES[n].icon;item.kind=INCIDENT_TYPES[n].kind;item.note=note;item.updatedAt=Date.now();item.status='Đã chỉnh sửa bởi quản trị viên';
+ }
+ refreshDuplicateConsensus();saveIncidents();drawIncidentMarkers();renderAlertsSheet();
+}
 function reportIncident(){
  if(!me){alert('Chưa có GPS.');return}
- const types=['Đường ngập','Ổ gà / đường hư hỏng','Đường bị chặn / cấm','Tai nạn / ùn tắc','Hạn chế tải trọng / chiều cao','Thay đổi tốc độ','Trạm thu phí / giá vé','Biển báo mới','Khác'];
- const v=prompt('CHỌN SỰ CỐ:\n'+types.map((x,i)=>(i+1)+'. '+x).join('\n'),'1'),n=Number(v)-1;
- if(!Number.isInteger(n)||n<0||n>=types.length)return;
- const note=prompt('Ghi chú thêm (có thể bỏ trống):')||'';
+ const v=prompt('CHỌN BIỂN BÁO / SỰ CỐ:\n'+INCIDENT_TYPES.map((x,i)=>(i+1)+'. '+x.icon+' '+x.type).join('\n'),'1');
+ const n=Number(v)-1;if(!Number.isInteger(n)||n<0||n>=INCIDENT_TYPES.length)return;
+ const t=INCIDENT_TYPES[n],note=prompt('Ghi chú thêm (có thể bỏ trống):')||'';
+ const timeWindow=prompt('Khung giờ áp dụng (HH:MM-HH:MM), bỏ trống nếu cả ngày:', '')||'';
+ let startTime='',endTime='';
+ if(/^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/.test(timeWindow)){[startTime,endTime]=timeWindow.split('-')}
+ const vehicleChoice=prompt('Áp dụng cho phương tiện: 1=tất cả, 2=ô tô, 3=xe máy, 4=xe tải','2')||'1';
+ const vehicleTypes=vehicleChoice==='1'?[]:vehicleChoice==='3'?['motorcycle']:vehicleChoice==='4'?['truck']:['car','taxi','van'];
  const validity=Number(prompt('Hạn báo cáo: 1=24 giờ, 2=3 ngày, 3=7 ngày','2')),hours=({1:24,2:72,3:168})[validity]||72;
- incidents.push({id:Date.now(),type:types[n],note,lat:me[0],lon:me[1],created:Date.now(),expires:Date.now()+hours*3600000,status:'Chưa xác minh'});
- saveIncidents();drawIncidentMarkers();renderAlertsSheet();alert('Đã lưu báo cáo trên điện thoại này.');
+ const speedLimit=/tốc độ/i.test(t.type)?Number(prompt('Tốc độ tối đa km/h (nếu biết):','50'))||null:null;
+ incidents.push({id:Date.now()+Math.floor(Math.random()*1000),type:t.type,icon:t.icon,kind:t.kind,note,lat:me[0],lon:me[1],roadId:null,directionBearing:Number.isFinite(gpsMeta.heading)?gpsMeta.heading:undefined,radiusMeters:35,ruleType:'reported',startTime,endTime,vehicleTypes,speedLimit,created:Date.now(),expires:Date.now()+hours*3600000,status:'Chưa xác minh',confirmationCount:1});
+ refreshDuplicateConsensus();
+ saveIncidents();drawIncidentMarkers();renderAlertsSheet();alert('Đã gửi báo cáo. Không cần quyền quản trị.');
 }
 function drawIncidentMarkers(){
- if(!map)return;if(incidentLayer)map.removeLayer(incidentLayer);incidentLayer=L.layerGroup().addTo(map);
+ if(!map)return;refreshDuplicateConsensus();if(incidentLayer)map.removeLayer(incidentLayer);incidentLayer=L.layerGroup().addTo(map);
  incidents=incidents.filter(x=>x.expires>Date.now());saveIncidents();
- incidents.forEach(x=>L.marker([x.lat,x.lon]).addTo(incidentLayer).bindPopup('<b>'+escapeHtml(x.type)+'</b><br>'+escapeHtml(x.note)+'<br>'+escapeHtml(x.status)));
+ incidents.forEach(x=>{
+  const admin=`<br><button onclick="adminIncidentAction('${String(x.id)}','edit')">Quản trị: sửa</button> <button onclick="adminIncidentAction('${String(x.id)}','delete')">Quản trị: xóa</button>`;
+  L.marker([x.lat,x.lon],{icon:incidentMarkerIcon(x)}).addTo(incidentLayer).bindPopup('<b>'+escapeHtml((x.kind==='residential_start'?'R.420':x.kind==='residential_end'?'R.421':(x.icon||'⚠️')))+' '+escapeHtml(x.type)+'</b><br>'+escapeHtml(x.note)+'<br>'+escapeHtml(x.status)+'<br>Hiệu lực: '+(x.startTime&&x.endTime?escapeHtml(x.startTime+'–'+x.endTime):'Cả ngày')+'<br>Phạm vi: '+(x.radiusMeters||35)+' m quanh điểm báo cáo<br>Phương tiện: '+(x.vehicleTypes?.length?escapeHtml(x.vehicleTypes.join(', ')):'Tất cả/chưa phân loại')+'<br>Số báo cáo trùng khớp: '+(x.confirmationCount||1)+admin);
+ });
 }
 function checkNearbyIncidents(){
  if(!me||!prefs.incidents)return;
  incidents.forEach(x=>{let d=dist(me,[x.lat,x.lon]);if(d<500&&!alertedIncidents[x.id]){alertedIncidents[x.id]=true;let msg='Cảnh báo sự cố, cách khoảng '+Math.round(d)+' mét. '+x.type;status(msg);setTurnBanner('⚠ CẢNH BÁO SỰ CỐ',msg);speak(msg);try{HieuNavAndroid.vibrate()}catch(e){}}if(d>700)delete alertedIncidents[x.id]});
 }
 function renderAlertsSheet(){
- let h='<div class="sheetHead">Báo cáo sự cố <button class="close" onclick="closeSheet()">Đóng</button></div><button class="success" style="width:100%;margin:5px 0 10px" onclick="reportIncident()">＋ BÁO CÁO SỰ CỐ TẠI VỊ TRÍ GPS</button><div class="subtle">Lưu cục bộ trên điện thoại này. Báo cáo chưa xác minh; hãy đối chiếu thực tế.</div>';
+ let h='<div class="sheetHead">Báo cáo sự cố <button class="close" onclick="closeSheet()">Đóng</button></div><button class="success" style="width:100%;margin:5px 0 10px" onclick="reportIncident()">＋ BÁO CÁO SỰ CỐ TẠI VỊ TRÍ GPS</button><div class="subtle">Ai cũng có thể gửi báo cáo, không cần quyền quản trị. Năm báo cáo cùng loại trong bán kính 100 m, trong 24 giờ sẽ được đánh dấu có nhiều xác nhận. Dữ liệu hiện lưu trên điện thoại này.</div>';
  const active=incidents.filter(x=>x.expires>Date.now()).sort((a,b)=>b.created-a.created);
  if(!active.length)h+='<div class="item">Chưa có báo cáo sự cố.</div>';
- active.forEach(x=>h+='<div class="item"><strong>'+escapeHtml(x.type)+'</strong>'+escapeHtml(x.note)+'<br><span class="subtle">'+new Date(x.created).toLocaleString('vi-VN')+' · '+escapeHtml(x.status)+'</span><br><button class="secondary" onclick="map.setView(['+x.lat+','+x.lon+'],17)">XEM VỊ TRÍ</button></div>');
+ active.forEach(x=>h+='<div class="item"><strong>'+escapeHtml(x.icon||'⚠️')+' '+escapeHtml(x.type)+'</strong>'+escapeHtml(x.note)+'<br><span class="subtle">'+new Date(x.created).toLocaleString('vi-VN')+' · '+escapeHtml(x.status)+' · '+(x.confirmationCount||1)+' báo cáo trùng khớp</span><br><button class="secondary" onclick="map.setView(['+x.lat+','+x.lon+'],17)">XEM VỊ TRÍ</button> <button class="secondary" onclick="adminIncidentAction('+JSON.stringify(String(x.id))+',\'edit\')">SỬA (QUẢN TRỊ)</button> <button class="danger" onclick="adminIncidentAction('+JSON.stringify(String(x.id))+',\'delete\')">XÓA (QUẢN TRỊ)</button></div>');
  $('sheet').innerHTML=h;
 }
 function renderSettingsSheet(){
@@ -432,10 +695,27 @@ function renderSettingsSheet(){
  h+='<div class="switchrow">Tự động tính lại khi lệch tuyến <input type="checkbox" '+(prefs.autoReroute?'checked':'')+' onchange="prefs.autoReroute=this.checked"></div>';
  h+='<div class="switchrow">Ngưỡng tốc độ <b>'+limit+' km/h <button onclick="changeLimit()">ĐỔI</button></b></div>';
  h+='<div class="switchrow">Giọng nói <input type="checkbox" '+(voiceEnabled?'checked':'')+' onchange="voiceEnabled=this.checked;localStorage.setItem(\'hnav_voice\',this.checked)"></div>';
- h+='<div class="item"><b>Phương tiện hiện tại: Ô tô</b><br><span class="subtle">HieuNav hiện ưu tiên tuyến đường dành cho ô tô. Chế độ xe máy sẽ được phát triển sau.</span></div>';
+  h+=`<button class="${vehicleType===v[0]?'success':'secondary'}" style="width:100%;display:flex;align-items:center;gap:14px;justify-content:flex-start;margin:8px 0;padding:12px" onclick="setVehicleType('${v[0]}')"><span style="font-size:28px">${v[1]}</span><span>${v[2]}</span>${vehicleType===v[0]?' ✓':''}</button>`;
  h+='<div class="item"><b>Hướng biểu tượng xe / la bàn</b><br><button class="secondary" onclick="enableOrientation()">BẬT CẢM BIẾN HƯỚNG</button> <button class="secondary" onclick="calibrateHeading()">HIỆU CHỈNH</button><div class="subtle">Ưu tiên hướng GPS khi xe chạy; dùng la bàn điện thoại khi dừng hoặc chạy chậm. Độ lệch hiệu chỉnh được lưu trên máy.</div></div>';
  h+='<div class="item subtle">Bản đồ OpenStreetMap · Tính tuyến OSRM (hồ sơ ô tô) · Google Maps chỉ mở để tham chiếu, không lấy dữ liệu giao thông trực tiếp.</div>';
  $('sheet').innerHTML=h;
+}
+function openVehiclePicker(){
+ const choices=[['car','SUV / VinFast VF5','Gầm cao · ô tô con'],['taxi','Taxi','Xe dịch vụ'],['van','Xe van','Xe chở hàng nhẹ'],['truck','Xe tải','Xe tải / xe giao hàng'],['motorcycle','Xe máy','Chế độ xe máy']];
+ let h='<div class="sheetHead">Chọn mô hình xe <button class="close" onclick="closeSheet()">Đóng</button></div><div class="subtle">Biểu tượng xe dạng 3D nhìn từ trên xuống. Chạm vào xe để mở bảng này.</div><div class="vehicle-choice-grid">';
+ choices.forEach(v=>{
+  h+=`<button class="vehicle-choice ${vehicleType===v[0]?'selected':''}" onclick="setVehicleType('${v[0]}')">${vehicleSvg(v[0])}<b>${v[1]}</b><small>${v[2]}</small>${vehicleType===v[0]?'<small>✓ Đang chọn</small>':''}</button>`;
+ });
+ h+='</div>';
+ $('sheet').innerHTML=h;
+ $('sheet').style.display='block';
+}
+function setVehicleType(v){
+ if(!['car','taxi','van','truck','motorcycle'].includes(v))return;
+ vehicleType=v;localStorage.setItem('hnav_vehicle',v);
+ if(meMarker)meMarker.setIcon(vehicleIcon());
+ if(map3dVehicleMarker){map3dVehicleMarker.getElement().innerHTML=vehicleSvg(vehicleType)}
+ closeSheet();status('Đã đổi giao diện xe: '+vehicleLabel());
 }
 function changeLimit(){let n=Number(prompt('Ngưỡng tốc độ km/h',limit));if(n>0&&n<201){limit=n;$('limitBadge').textContent=n;localStorage.setItem('hnav_limit',n);renderSettingsSheet()}}
 function showTab(tab){
@@ -447,7 +727,7 @@ function showTab(tab){
 function closeSheet(){$('sheet').style.display='none';$('tabMap').classList.add('active');['tabRoute','tabAlerts','tabSettings'].forEach(id=>$(id).classList.remove('active'))}
 function clearRoute(){
  ++routeRequestId;stopRoutePreview();if(routeLine)map.removeLayer(routeLine);if(destinationMarker)map.removeLayer(destinationMarker);
- routeLine=destinationMarker=null;destination=routeData=null;steps=[];routeCoords=[];navigating=false;stepIndex=0;offRouteSince=0;clearViaMarkers();$('guidanceAlert').style.display='none';$('laneHint').style.display='none';
+ routeLine=destinationMarker=null;destination=routeData=null;steps=[];routeCoords=[];update3DRoute();navigating=false;stepIndex=0;offRouteSince=0;clearViaMarkers();$('guidanceAlert').style.display='none';$('laneHint').style.display='none';
  map?.getContainer().classList.remove('nav3d');
  $('distance').textContent='-- km';$('eta').textContent='--';$('startNav').disabled=true;$('startNav').textContent='➤';$('turnBanner').style.display='none';$('destination').value='';$('etaDetails').textContent='Giờ đến dự kiến: -- · Có tính dự phòng';status('Đã xóa lộ trình');
 }
@@ -463,14 +743,31 @@ function clearRoute(){
 (function(){const style=document.createElement('style');style.textContent='#map.nav3d .leaflet-map-pane{transform-origin:50% 72%;rotate:x 42deg;scale:1.18;transition:rotate .45s ease,scale .45s ease} #map.nav3d .leaflet-tile-pane{filter:saturate(1.12) contrast(1.06)} #map.nav3d .leaflet-marker-pane{filter:drop-shadow(0 2px 2px #0005)}';document.head.appendChild(style)})();
 function startRoutePreview(){
  if(!routeCoords||routeCoords.length<2){status('Hãy tìm điểm đến để có tuyến xem trước.');return}
- stopRoutePreview();navigating=false;map.getContainer().classList.add('nav3d');setTimeout(()=>map.invalidateSize(true),250);
- previewIndex=0;previewMarker=L.circleMarker([routeCoords[0][1],routeCoords[0][0]],{radius:9,color:'#fff',weight:3,fillColor:'#f59e0b',fillOpacity:1}).addTo(map);
- map.fitBounds(routeLine.getBounds(),{padding:[35,100]});status('Đang chạy thử lộ trình ảo. Đây chỉ là mô phỏng, không điều khiển xe.');
- previewTimer=setInterval(()=>{previewIndex+=Math.max(1,Math.floor(routeCoords.length/180));if(previewIndex>=routeCoords.length){stopRoutePreview();status('Đã xem hết lộ trình mô phỏng.');return}const c=routeCoords[previewIndex];previewMarker.setLatLng([c[1],c[0]]);map.panTo([c[1],c[0]],{animate:true,duration:.2})},180);
+ stopRoutePreview();navigating=false;previewIndex=0;
+ if(is3DMode&&map3dReady){
+  const c=routeCoords[0];map3d.getSource('hnav-preview')?.setData({type:'FeatureCollection',features:[geoPoint([c[1],c[0]])]});
+  map3d.flyTo({center:c,zoom:16,pitch:65,duration:500});
+ }else{
+  map.getContainer().classList.add('nav3d');setTimeout(()=>map.invalidateSize(true),250);
+  previewMarker=L.circleMarker([routeCoords[0][1],routeCoords[0][0]],{radius:9,color:'#fff',weight:3,fillColor:'#f59e0b',fillOpacity:1}).addTo(map);
+  map.fitBounds(routeLine.getBounds(),{padding:[35,100]});
+ }
+ status('Đang chạy thử lộ trình ảo. Đây chỉ là mô phỏng, không điều khiển xe.');
+ previewTimer=setInterval(()=>{
+  previewIndex+=Math.max(1,Math.floor(routeCoords.length/180));
+  if(previewIndex>=routeCoords.length){stopRoutePreview();status('Đã xem hết lộ trình mô phỏng.');return}
+  const c=routeCoords[previewIndex];
+  if(is3DMode&&map3dReady){map3d.getSource('hnav-preview')?.setData({type:'FeatureCollection',features:[{type:'Feature',geometry:{type:'Point',coordinates:c},properties:{}}]});map3d.easeTo({center:c,pitch:65,duration:180})}
+  else if(previewMarker){previewMarker.setLatLng([c[1],c[0]]);map.panTo([c[1],c[0]],{animate:true,duration:.2})}
+ },180);
 }
-function stopRoutePreview(){if(previewTimer){clearInterval(previewTimer);previewTimer=null}if(previewMarker&&map){map.removeLayer(previewMarker);previewMarker=null}if(!navigating&&map&&!driveAssist)map.getContainer().classList.remove('nav3d')}
-function toggleMapPerspective(){if(!map)return;map.getContainer().classList.toggle('nav3d');setTimeout(()=>map.invalidateSize(true),250);status(map.getContainer().classList.contains('nav3d')?'Đã bật phối cảnh 2.5D giả lập trên nền bản đồ 2D.':'Đã tắt phối cảnh bản đồ.')}
-function toggleCompactUI(){document.body.classList.toggle('hnav-compact')}
+function stopRoutePreview(){if(previewTimer){clearInterval(previewTimer);previewTimer=null}if(previewMarker&&map){map.removeLayer(previewMarker);previewMarker=null}if(map3dReady)map3d.getSource('hnav-preview')?.setData({type:'FeatureCollection',features:[]});if(!navigating&&map&&!driveAssist)map.getContainer().classList.remove('nav3d')}
+function toggleMapPerspective(){if(!map)return;map.getContainer().classList.toggle('nav3d');setTimeout(()=>map.invalidateSize(true),250);status(map.getContainer().classList.contains('nav3d')?'Đã bật bản đồ 3D vector với công trình nổi khi có dữ liệu.':'Đã tắt phối cảnh bản đồ.')}
+function toggleCompactUI(){
+ document.body.classList.remove('hnav-compact');
+ document.querySelectorAll('#bottom [data-widget],#bottom .float-dock,#bottom .float-preview,#bottom .float-actions,.map-status').forEach(el=>{el.style.opacity='1';el.style.pointerEvents='auto'});
+ status('Các nút điều khiển đã hiện. Chạm ☰ để hiện lại bất cứ lúc nào.');
+}
 function openGoogleReference(){
  if(!destination){status('Hãy tìm điểm đến trước khi mở Google Maps.');return}
  const origin=me?me[0]+','+me[1]:'',dest=destination[0]+','+destination[1];
