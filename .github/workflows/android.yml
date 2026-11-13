@@ -21,34 +21,48 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.13"
+
       - name: Install Android SDK packages
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
-      - name: Prepare persistent signing key
+
+      - name: Prepare and validate persistent signing key
         shell: bash
         run: |
+          set -euo pipefail
           if [ -z "$HIEUNAV_KEYSTORE_BASE64" ] || [ -z "$HIEUNAV_STORE_PASSWORD" ] || [ -z "$HIEUNAV_KEY_ALIAS" ] || [ -z "$HIEUNAV_KEY_PASSWORD" ]; then
-            echo "::error::Missing GitHub Actions secrets for persistent APK signing. Add HIEUNAV_KEYSTORE_BASE64, HIEUNAV_STORE_PASSWORD, HIEUNAV_KEY_ALIAS and HIEUNAV_KEY_PASSWORD in repository Settings > Secrets and variables > Actions."
+            echo "::error::Missing GitHub Actions secrets. Check repository Settings > Secrets and variables > Actions."
             exit 1
           fi
           echo "$HIEUNAV_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/hieunav-release.jks"
+          test -s "$RUNNER_TEMP/hieunav-release.jks"
+          keytool -list -keystore "$RUNNER_TEMP/hieunav-release.jks" -storepass "$HIEUNAV_STORE_PASSWORD" -alias "$HIEUNAV_KEY_ALIAS" >/dev/null
           echo "HIEUNAV_KEYSTORE_PATH=$RUNNER_TEMP/hieunav-release.jks" >> "$GITHUB_ENV"
+          echo "Persistent HieuNav signing key is valid."
+
       - name: Build signed APK
         run: gradle --no-daemon assembleDebug
+
+      - name: Verify APK signature
+        run: |
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: HieuNav-debug-apk
+          name: HieuNav-signed-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
