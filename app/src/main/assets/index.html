@@ -245,6 +245,147 @@ function clearRoute(){
  $('distance').textContent='-- km';$('eta').textContent='--';$('startNav').disabled=true;$('startNav').textContent='DẪN ĐƯỜNG';$('startNav').className='success';
  $('turnBanner').style.display='none';$('destination').value='';status('Đã xóa lộ trình');
 }
+ 
+/* HIEUNAV UPDATE 0.3 */
+
+/* 1. Tự ẩn nút sau 5 giây, chạm màn hình để hiện lại */
+(function(){
+ const style=document.createElement('style');
+ style.textContent=`
+ .hnav-controls-hidden .top,
+ .hnav-controls-hidden .dock,
+ .hnav-controls-hidden #navActions {opacity:0;pointer-events:none;transition:opacity .3s}
+ .top,.dock,#navActions{transition:opacity .3s}
+ `;
+ document.head.appendChild(style);
+ let hideTimer;
+ function showControls(){
+  document.body.classList.remove('hnav-controls-hidden');
+  clearTimeout(hideTimer);
+  hideTimer=setTimeout(()=>document.body.classList.add('hnav-controls-hidden'),5000);
+ }
+ document.addEventListener('touchstart',showControls,{passive:true});
+ document.addEventListener('click',showControls);
+ document.addEventListener('mousemove',showControls);
+ showControls();
+})();
+
+/* 2. Lưu báo cáo sự cố trên điện thoại */
+let hnavIncidents=JSON.parse(localStorage.getItem('hnav_incidents')||'[]');
+let hnavIncidentLayer=null;
+let hnavAlerted={};
+
+function saveIncidents(){
+ localStorage.setItem('hnav_incidents',JSON.stringify(hnavIncidents));
+}
+
+function reportIncident(){
+ if(!me){alert('Chưa xác định được GPS.');return}
+ const types=[
+  'Đường bị ngập',
+  'Đường hư hỏng / ổ gà',
+  'Đường bị chặn / cấm',
+  'Tai nạn / ùn tắc',
+  'Hạn chế tải trọng / chiều cao',
+  'Thay đổi tốc độ',
+  'Trạm thu phí / giá vé',
+  'Biển báo mới',
+  'Khác'
+ ];
+ const choice=prompt('CHỌN LOẠI SỰ CỐ:\n'+types.map((v,i)=>(i+1)+'. '+v).join('\n'));
+ const index=Number(choice)-1;
+ if(!Number.isInteger(index)||index<0||index>=types.length)return;
+ const note=prompt('Ghi chú thêm (có thể để trống):')||'';
+ const validity=Number(prompt('Thời hạn báo cáo:\n1. 24 giờ\n2. 3 ngày\n3. 7 ngày\n4. Không tự hết hạn','2'));
+ const hours=({1:24,2:72,3:168,4:87600})[validity]||72;
+ const item={
+  id:Date.now(),
+  type:types[index],
+  note,
+  lat:me[0],
+  lon:me[1],
+  created:Date.now(),
+  expires:Date.now()+hours*3600000,
+  status:'Chưa xác minh'
+ };
+ hnavIncidents.push(item);
+ saveIncidents();
+ drawIncidentMarkers();
+ alert('Đã lưu báo cáo tại vị trí GPS hiện tại.');
+ renderAlertsSheet();
+}
+
+function drawIncidentMarkers(){
+ if(!map)return;
+ if(hnavIncidentLayer)map.removeLayer(hnavIncidentLayer);
+ hnavIncidentLayer=L.layerGroup().addTo(map);
+ hnavIncidents=hnavIncidents.filter(x=>x.expires>Date.now());
+ saveIncidents();
+ hnavIncidents.forEach(x=>{
+  L.marker([x.lat,x.lon]).addTo(hnavIncidentLayer)
+   .bindPopup('<b>'+escapeHtml(x.type)+'</b><br>'+
+    escapeHtml(x.note)+'<br>'+x.status);
+ });
+}
+
+function checkNearbyIncidents(){
+ if(!me)return;
+ hnavIncidents.forEach(x=>{
+  const d=dist(me,[x.lat,x.lon]);
+  if(d<500&&!hnavAlerted[x.id]){
+   hnavAlerted[x.id]=true;
+   const message='Cảnh báo sự cố phía trước, cách khoảng '+Math.round(d)+' mét. '+x.type;
+   status(message);
+   setTurnBanner('⚠ CẢNH BÁO SỰ CỐ',message);
+   speakGuidance(message);
+   try{HieuNavAndroid.vibrate()}catch(e){}
+  }
+  if(d>700)delete hnavAlerted[x.id];
+ });
+}
+
+/* 3. Hiển thị danh sách báo cáo và nút báo cáo */
+function renderAlertsSheet(){
+ let html='<div class="sheetHead">Biển báo & sự cố '+
+ '<button class="close" onclick="closeSheet()">Đóng</button></div>';
+ html+='<button class="success" style="width:100%;margin:8px 0" onclick="reportIncident()">＋ BÁO CÁO SỰ CỐ TẠI ĐÂY</button>';
+ html+='<div class="subtle">Báo cáo được lưu trên thiết bị. Thông tin chưa xác minh cần được đối chiếu thực tế.</div>';
+ html+='<div class="item"><strong>Sự cố do người dùng báo cáo</strong></div>';
+ const active=hnavIncidents.filter(x=>x.expires>Date.now()).sort((a,b)=>b.created-a.created);
+ if(!active.length)html+='<div class="item">Chưa có báo cáo sự cố.</div>';
+ active.forEach(x=>{
+  html+='<div class="item"><strong>'+escapeHtml(x.type)+'</strong>'+
+  escapeHtml(x.note)+'<br><span class="subtle">'+
+  new Date(x.created).toLocaleString('vi-VN')+' · '+x.status+
+  '</span><br><button class="secondary" onclick="map.setView(['+
+  x.lat+','+x.lon+'],17)">XEM TRÊN BẢN ĐỒ</button></div>';
+ });
+ html+='<div class="item"><strong>Dữ liệu biển báo OpenStreetMap</strong></div>';
+ html+='<div class="subtle">Dữ liệu có thể thiếu hoặc cũ. Luôn ưu tiên biển báo thực tế.</div>';
+ let list=[];
+ alertFeatures.forEach(f=>classifyAlert(f.tags).forEach(a=>list.push({...a,d:dist(me,[f.lat,f.lon])})));
+ list.sort((a,b)=>a.d-b.d);
+ if(!list.length)html+='<div class="item">Chưa có dữ liệu biển báo gần đây.</div>';
+ else list.slice(0,10).forEach(a=>{
+  html+='<div class="item"><strong>'+escapeHtml(a.title)+'</strong>'+
+  escapeHtml(a.detail)+' · '+Math.round(a.d)+' m</div>';
+ });
+ html+='<button class="secondary" onclick="loadNearbyAlerts()">LÀM MỚI BIỂN BÁO</button>';
+ $('sheet').innerHTML=html;
+}
+
+/* 4. Bổ sung kiểm tra sự cố mỗi lần GPS cập nhật */
+const hnavOriginalLocationUpdate=hieuNavUpdateLocation;
+hieuNavUpdateLocation=function(lat,lon,speed){
+ hnavOriginalLocationUpdate(lat,lon,speed);
+ checkNearbyIncidents();
+};
+
+/* 5. Khôi phục báo cáo khi mở ứng dụng */
+window.addEventListener('load',()=>{
+ setTimeout(drawIncidentMarkers,1200);
+});
+
 window.hieuNavUpdateLocation=hieuNavUpdateLocation;
 window.addEventListener('load',init);
 </script>
