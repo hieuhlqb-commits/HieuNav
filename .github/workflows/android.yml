@@ -1,8 +1,9 @@
+
 name: Build HieuNav APK
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
@@ -18,6 +19,7 @@ jobs:
       HIEUNAV_STORE_PASSWORD: ${{ secrets.HIEUNAV_STORE_PASSWORD }}
       HIEUNAV_KEY_ALIAS: ${{ secrets.HIEUNAV_KEY_ALIAS }}
       HIEUNAV_KEY_PASSWORD: ${{ secrets.HIEUNAV_KEY_PASSWORD }}
+
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -42,6 +44,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           for name in HIEUNAV_KEYSTORE_BASE64 HIEUNAV_STORE_PASSWORD HIEUNAV_KEY_ALIAS HIEUNAV_KEY_PASSWORD; do
             if [ -z "${!name:-}" ]; then
               echo "::error::Missing repository secret: $name"
@@ -49,21 +52,33 @@ jobs:
             fi
           done
 
-          KEYSTORE="$RUNNER_TEMP/hieunav-release.keystore"
-          if ! printf '%s' "$HIEUNAV_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"; then
-            echo "::error::HIEUNAV_KEYSTORE_BASE64 is not valid Base64. Re-copy the Base64 output from Termux."
-            exit 1
-          fi
-          if [ ! -s "$KEYSTORE" ]; then
-            echo "::error::Decoded keystore is empty. Check HIEUNAV_KEYSTORE_BASE64."
+          KEYSTORE="$RUNNER_TEMP/hieunav-release.jks"
+
+          printf '%s' "$HIEUNAV_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+
+          echo "Keystore size:"
+          wc -c < "$KEYSTORE"
+
+          echo "Keystore SHA256:"
+          ACTUAL_SHA=$(sha256sum "$KEYSTORE" | awk '{print $1}')
+          echo "$ACTUAL_SHA"
+
+          EXPECTED_SHA="5fe4576072b9c60d51bccab8a1a946a32c34eae571db355f710cf1776049f6b1"
+
+          if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+            echo "::error::Keystore SHA256 mismatch. Check GitHub Secret."
             exit 1
           fi
 
-          if ! keytool -list -keystore "$KEYSTORE" -storepass "$HIEUNAV_STORE_PASSWORD" -alias "$HIEUNAV_KEY_ALIAS" > "$RUNNER_TEMP/key-check.txt" 2>&1; then
-            echo "::error::Keystore validation failed. Check HIEUNAV_STORE_PASSWORD and HIEUNAV_KEY_ALIAS. Details:"
-            cat "$RUNNER_TEMP/key-check.txt"
+          if [ "$(wc -c < "$KEYSTORE")" -ne 2666 ]; then
+            echo "::error::Keystore size mismatch."
             exit 1
           fi
+
+          keytool -list \
+            -keystore "$KEYSTORE" \
+            -storepass "$HIEUNAV_STORE_PASSWORD" \
+            -alias "$HIEUNAV_KEY_ALIAS"
 
           echo "HIEUNAV_KEYSTORE_PATH=$KEYSTORE" >> "$GITHUB_ENV"
           echo "Persistent HieuNav signing key is valid."
