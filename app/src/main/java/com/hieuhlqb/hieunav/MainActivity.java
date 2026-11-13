@@ -14,6 +14,11 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 import java.util.Locale;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 
 public class MainActivity extends Activity implements LocationListener {
     private static final int LOCATION_REQUEST = 1001;
@@ -141,6 +146,45 @@ public class MainActivity extends Activity implements LocationListener {
 
         @JavascriptInterface public boolean isVietnameseVoiceReady() {
             return ttsReady;
+        }
+
+        @JavascriptInterface public void requestTrafficRoute(double originLat, double originLon,
+                                                               double destLat, double destLon,
+                                                               String apiKey, String requestId) {
+            new Thread(() -> {
+                HttpURLConnection connection = null;
+                String response;
+                try {
+                    String query = "origin=" + originLat + "," + originLon
+                            + "&destination=" + destLat + "," + destLon
+                            + "&mode=driving&departure_time=now&traffic_model=best_guess"
+                            + "&language=vi&key=" + URLEncoder.encode(apiKey, "UTF-8");
+                    URL url = new URL("https://maps.googleapis.com/maps/api/directions/json?" + query);
+                    connection = (HttpURLConnection) url.openConnection();
+                    connection.setConnectTimeout(12000);
+                    connection.setReadTimeout(15000);
+                    StringBuilder body = new StringBuilder();
+                    try (BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(connection.getInputStream(), "UTF-8"))) {
+                        String line;
+                        while ((line = reader.readLine()) != null) body.append(line);
+                    }
+                    response = body.toString();
+                } catch (Exception ex) {
+                    response = "{\\"status\\":\\"HIEUNAV_NETWORK_ERROR\\",\\"error_message\\":"
+                            + org.json.JSONObject.quote(ex.getMessage() == null ? "Network error" : ex.getMessage()) + "}";
+                } finally {
+                    if (connection != null) connection.disconnect();
+                }
+                final String result = response;
+                runOnUiThread(() -> {
+                    if (webView != null) {
+                        webView.evaluateJavascript("window.onTrafficRouteResponse("
+                                + org.json.JSONObject.quote(result) + ","
+                                + org.json.JSONObject.quote(requestId) + ");", null);
+                    }
+                });
+            }).start();
         }
     }
 }
