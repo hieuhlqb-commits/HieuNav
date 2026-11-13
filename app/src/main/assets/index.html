@@ -99,6 +99,29 @@ body.hnav-map-dark #map .leaflet-overlay-pane{filter:brightness(.9)}
 body.hnav-map-dark .leaflet-control-attribution{background:rgba(12,24,37,.65);color:#d7e1eb}
 body.hnav-map-dark .leaflet-control-attribution a{color:#8ecbff}
 </style>
+
+<style id="hnav-layout-fix">
+/* Gọn cụm điều khiển, tránh đè lên nhau trên màn hình điện thoại */
+#bottom .float-dock{left:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));gap:4px;flex-wrap:nowrap}
+#bottom .float-dock button,#bottom .float-preview button{min-width:44px;width:44px;height:44px;font-size:13px}
+#bottom .float-preview{left:8px;bottom:calc(60px + env(safe-area-inset-bottom,0px));gap:4px}
+#bottom .float-actions{right:8px;bottom:calc(112px + env(safe-area-inset-bottom,0px));gap:5px}
+#bottom .round-action{width:40px;height:40px;font-size:16px}
+#bottom .round-action small{font-size:7px}
+#bottom .speed-widget{left:8px;top:clamp(205px,27vh,270px)}
+#bottom .limit-widget{left:8px;top:clamp(292px,39vh,365px)}
+#bottom .eta-widget{right:8px;top:clamp(205px,27vh,270px);max-width:145px}
+#bottom .float-widget{padding:5px 7px}
+#tripInfo{position:absolute;left:8px;right:8px;bottom:calc(110px + env(safe-area-inset-bottom,0px));z-index:501;pointer-events:none;background:#102b48e8;color:#fff;border-radius:9px;padding:5px 8px;font-size:10px;line-height:1.35;box-shadow:0 2px 8px #0004}
+#tripInfo b{color:#cce6ff}
+#gpsDetails{position:absolute;left:8px;right:8px;top:4px;z-index:501;font-size:10px;color:#fff;text-shadow:0 1px 3px #000;background:#102b4880;padding:3px 6px;border-radius:6px;pointer-events:none}
+@media(max-height:720px){
+ #bottom .float-actions{bottom:calc(100px + env(safe-area-inset-bottom,0px))}
+ #bottom .float-preview{bottom:calc(55px + env(safe-area-inset-bottom,0px))}
+ #tripInfo{bottom:calc(100px + env(safe-area-inset-bottom,0px))}
+}
+</style>
+
 </head>
 <body>
 <div id="map"></div><div id="map3d" aria-label="Bản đồ 3D"></div>
@@ -154,20 +177,20 @@ body.hnav-map-dark .leaflet-control-attribution a{color:#8ecbff}
  </div>
  <div id="status" class="map-status">Đang tải bản đồ…</div>
  <div id="gpsDetails" hidden>GPS: đang chờ tín hiệu · Độ chính xác: -- m · Hướng: --</div>
- <div id="etaDetails" hidden>Giờ đến dự kiến: -- · Có tính dự phòng</div>
+ <div id="etaDetails" hidden>Giờ đến dự kiến: -- · Có tính dự phòng</div><div id="tripInfo">Vị trí: đang chờ GPS · Đích đến: chưa chọn</div>
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js'"></script>
 <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate.js"></script><script src="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.js"></script>
 <script>
 'use strict';
 let map,me=null,meMarker=null,routeLine=null,destinationMarker=null,mapInitStarted=false;
-let limit=Number(localStorage.getItem('hnav_limit')||60),routeData=null,steps=[],stepIndex=0,navigating=false,destination=null,lastSpeedAlert=0,lastSpokenStep=-1;
+let limit=Number(localStorage.getItem('hnav_limit')||60),routeData=null,steps=[],stepIndex=0,navigating=false,destination=null,destinationLabel='',lastSpeedAlert=0,lastSpokenStep=-1;
 let vehicleType=localStorage.getItem('hnav_vehicle')||'car',voiceEnabled=localStorage.getItem('hnav_voice')!=='false';
 let vehicleScale=Number(localStorage.getItem('hnav_vehicle_scale')||1),vehicleColor=localStorage.getItem('hnav_vehicle_color')||'#263f59';
 let gpsSpeedOffset=Number(localStorage.getItem('hnav_gps_speed_offset')||0),smoothedSpeedKmh=null,lastGpsFix=null,lastSpeedAt=0,lastPositionAt=0;
 let filteredHeading=null,lastHeadingUpdate=0,lastCameraCenterAt=0,smoothedPosition=null;
 let previewSpeed=Number(localStorage.getItem('hnav_preview_speed')||45),previewStartedAt=0,previewDistances=[],lastGuidanceStep=-1,lastGuidanceStage=0;
-let previewTravelledMeters=0,previewLastTick=0,previewGuidanceStep=-1,previewGuidanceStage=0,previewLastSpoken=-1,previewPosition=null;
+let previewTravelledMeters=0,previewLastTick=0,previewGuidanceStep=-1,previewGuidanceStage=0,previewLastSpoken=-1,previewPosition=null,previewLastCameraAt=0;
 let hnavWakeLock=null,wakeLockEnabled=localStorage.getItem('hnav_keep_screen')!=='false';
 let themeMode=localStorage.getItem('hnav_theme_mode')||'auto',ambientLux=null,ambientSensor=null,lastThemeDecision=null,ambientLowCount=0,ambientHighCount=0;
 
@@ -186,6 +209,19 @@ function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;',
 function geoPoint(coord){
  return {type:'Feature',geometry:{type:'Point',coordinates:[coord[1],coord[0]]},properties:{}};
 }
+function set3DDrivingCamera(position,bearing,speed=45,duration=700){
+ if(!map3dReady||!map3d||!position)return;
+ const kmh=Math.max(0,Number(speed)||0);
+ // Driving perspective: closer at low speed, slightly wider at highway speed.
+ const zoom=kmh>=90?17.1:kmh>=60?17.5:17.9;
+ const pitch=kmh>=90?64:68;
+ const current=map3d.getBearing();
+ const target=Number.isFinite(bearing)?bearing:current;
+ const delta=Math.abs(((target-current+540)%360)-180);
+ const opts={center:[position[1],position[0]],zoom,pitch,duration,essential:true};
+ if(delta>5)opts.bearing=target;
+ map3d.easeTo(opts);
+}
 function update3DVehicle(){
  if(!map3dReady||!me)return;
  if(!map3dVehicleMarker){
@@ -202,10 +238,7 @@ function update3DVehicle(){
  if(is3DMode&&followVehicle&&Date.now()-lastCameraCenterAt>1500){
   lastCameraCenterAt=Date.now();
   const bearing=filteredHeading===null?map3d.getBearing():filteredHeading;
-  const delta=Math.abs(((bearing-map3d.getBearing()+540)%360)-180);
-  const opts={center:[me[1],me[0]],zoom:Math.max(map3d.getZoom(),16),pitch:58,duration:1300,essential:true};
-  if(delta>10)opts.bearing=bearing;
-  map3d.easeTo(opts);
+  set3DDrivingCamera(me,bearing,smoothedSpeedKmh||45,950);
  }
 }
 function update3DRoute(){
@@ -223,7 +256,7 @@ function init3DMap(){
    container:'map3d',
    style:'https://tiles.openfreemap.org/styles/liberty',
    center:me?[me[1],me[0]]:[106.7,10.8],
-   zoom:me?16:5,pitch:64,bearing:0,
+   zoom:me?17.8:5,pitch:68,bearing:0,
    maxPitch:75, attributionControl:true
   });
   map3d.addControl(new maplibregl.NavigationControl({showCompass:true,showZoom:true}),'top-right');
@@ -274,7 +307,7 @@ function toggleReal3D(){
    map3d.resize();
    if(me){
     const b=smooth3DBearing===null?(Number.isFinite(gpsMeta.heading)?gpsMeta.heading:map3d.getBearing()):smooth3DBearing;
-    map3d.jumpTo({center:[me[1],me[0]],zoom:Math.max(map3d.getZoom(),16),pitch:62,bearing:b});
+    map3d.jumpTo({center:[me[1],me[0]],zoom:17.8,pitch:68,bearing:b});
    }
    update3DRoute();update3DVehicle();
   }
@@ -495,12 +528,22 @@ async function enableDriveAssist(){
  status('Đã bật chế độ lái xe 2.5D. Tìm điểm đến để có hướng dẫn làn đường và biển báo dự kiến.');
  if(me)toggleFollow(true);
 }
+
+function refreshTripInfo(){
+ const el=$('tripInfo');if(!el)return;
+ let where='Chưa xác định vị trí';
+ if(me)where=me[0].toFixed(5)+', '+me[1].toFixed(5);
+ let road='';
+ if(navigating&&steps[stepIndex])road=steps[stepIndex].name||steps[stepIndex].ref||'';
+ const dest=destinationLabel||($('destination')?.value||'Chưa chọn');
+ el.innerHTML='<b>Vị trí:</b> '+escapeHtml(road?road+' · '+where:where)+'<br><b>Đích đến:</b> '+escapeHtml(dest.length>64?dest.slice(0,61)+'…':dest);
+}
 function hieuNavUpdateLocation(lat,lon,speed,meta={}){
  gpsMeta=meta||{};
  const now=Number(gpsMeta.timestamp)||Date.now();
  const point=[Number(lat),Number(lon)];
  const accuracy=Number(gpsMeta.accuracy);
- const accuracyOK=Number.isFinite(accuracy)&&accuracy<=50;
+ const accuracyOK=!Number.isFinite(accuracy)||accuracy<=80;
  let rawKmh=(Number.isFinite(Number(speed))&&speed!==null&&speed!==''&&Number(speed)>=0)?Number(speed)*3.6:null;
 
  // Derive speed from consecutive GPS fixes if the Android GPS speed is absent,
@@ -544,7 +587,7 @@ function hieuNavUpdateLocation(lat,lon,speed,meta={}){
    const dt=Math.max(.5,Math.min(5,(now-(lastPositionAt||now-1000))/1000));
    const maxJump=Math.max(55,(s/3.6)*dt*2.5);
    if(jump<=maxJump){
-    const weight=Math.max(.16,Math.min(.55,22/Math.max(8,accuracy)));
+    const weight=Number.isFinite(accuracy)?Math.max(.16,Math.min(.55,22/Math.max(8,accuracy))):.32;
     smoothedPosition=[smoothedPosition[0]+(point[0]-smoothedPosition[0])*weight,
                       smoothedPosition[1]+(point[1]-smoothedPosition[1])*weight];
    }
@@ -555,7 +598,7 @@ function hieuNavUpdateLocation(lat,lon,speed,meta={}){
  const gpsInfo=$('gpsDetails');
  if(gpsInfo){
   gpsInfo.hidden=false;
-  const speedSource=rawKmh===null?'đang chờ tốc độ':(derivedKmh!==null&&accuracyOK&&(Number(speed)===0||speed===null)?'tính từ GPS':'GPS');
+  const speedSource=rawKmh===null?'GPS chưa cung cấp tốc độ':(derivedKmh!==null&&accuracyOK&&(Number(speed)===0||speed===null)?'tính từ GPS':'GPS');
   gpsInfo.textContent='Tốc độ: '+s+' km/h · '+speedSource+' · Sai số vị trí: '+(Number.isFinite(accuracy)?Math.round(accuracy):'--')+' m';
  }
  if(!meMarker){
@@ -743,7 +786,7 @@ async function searchRoute(){
  if(!me){status('Đang chờ GPS. Bật định vị rồi tìm lại.');return}
  status('Đang tìm điểm đến và tính tuyến ô tô…');
  try{
-  const found=await geocode(q);destination=found.coord;
+  const found=await geocode(q);destination=found.coord;destinationLabel=found.label;
   if(destinationMarker)map.removeLayer(destinationMarker);
   destinationMarker=L.marker(destination).addTo(map).bindPopup(escapeHtml(found.label));
   clearViaMarkers();
@@ -776,7 +819,7 @@ async function openMapPointPicker(latlng){
 function closeMapPick(){$('mapPickDialog').style.display='none';pendingMapPoint=null}
 async function useMapPointAsDestination(){
  if(!pendingMapPoint)return;
- destination=pendingMapPoint.slice();$('destination').value='Điểm đã chọn trên bản đồ';
+ destination=pendingMapPoint.slice();destinationLabel='Điểm đã chọn trên bản đồ';$('destination').value=destinationLabel;
  if(destinationMarker)map.removeLayer(destinationMarker);
  destinationMarker=L.marker(destination).addTo(map).bindPopup('Điểm đến');
  clearViaMarkers();closeMapPick();
@@ -816,7 +859,7 @@ function updateNavigationProgress(){
  if(!me||!steps.length)return;
  let best=stepIndex,bestD=Infinity;
  for(let i=Math.max(0,stepIndex-1);i<Math.min(steps.length,stepIndex+7);i++){let loc=steps[i].maneuver?.location;if(!loc)continue;let d=dist(me,[loc[1],loc[0]]);if(d<bestD){bestD=d;best=i}}
- if(bestD<55)stepIndex=Math.max(stepIndex,best);
+ if(bestD<55)stepIndex=Math.max(stepIndex,best);refreshTripInfo();
  if(destination&&dist(me,destination)<45){navigating=false;setTurnBanner('ĐÃ ĐẾN NƠI','Bạn đã đến gần điểm đến.');$('startNav').textContent='✓';map.getContainer().classList.remove('nav3d');return}
  const s=steps[Math.min(stepIndex,steps.length-1)],loc=s?.maneuver?.location,d=loc?dist(me,[loc[1],loc[0]]):0;
  const instruction=maneuverText(s);
@@ -1013,7 +1056,11 @@ function reportAtCurrentRoutePosition(){
  const duration=Number(prompt('Thời hạn lưu: 1=24 giờ, 2=7 ngày, 3=30 ngày','2'));
  const hours=({1:24,2:168,3:720})[duration]||168;
  incidents.push({id:Date.now()+Math.floor(Math.random()*1000),type:o[0],icon:o[1],kind:o[2],note,lat:point[0],lon:point[1],roadId:null,directionBearing:Number.isFinite(gpsMeta.heading)?gpsMeta.heading:undefined,radiusMeters:35,ruleType:'reported',speedLimit:o[3],validFrom:Date.now(),created:Date.now(),expires:Date.now()+hours*3600000,status:validity==='1'?'Đang khai báo hiệu lực · chưa xác minh':validity==='2'?'Đã hết hiệu lực · cần xác minh':'Chưa rõ hiệu lực',reportedValidity:validity,vehicleTypes:[],confirmationCount:1});
- saveIncidents();drawIncidentMarkers();renderAlertsSheet();status('Đã lưu biển báo tại vị trí '+point[0].toFixed(5)+', '+point[1].toFixed(5));
+ if(o[2]==='speed_limit'&&o[3]){
+  limit=o[3];localStorage.setItem('hnav_limit',String(limit));
+  const badge=$('limitBadge');if(badge)badge.textContent=String(limit);
+ }
+ saveIncidents();drawIncidentMarkers();renderAlertsSheet();refreshRoadRuleStatus();status('Đã lưu biển báo tại vị trí '+point[0].toFixed(5)+', '+point[1].toFixed(5));
 }
 function reportIncident(){
  if(!me){alert('Chưa có GPS.');return}
@@ -1117,7 +1164,7 @@ function savePreviewSpeed(v){
  localStorage.setItem('hnav_preview_speed',previewSpeed);
  const e=$('previewSpeedValue');if(e)e.textContent=previewSpeed+' km/h';
  const live=$('previewLiveSpeed');if(live)live.textContent=previewSpeed+' km/h';
- if(previewTimer)status('Đang xem trước · tốc độ mô phỏng '+previewSpeed+' km/h');
+ if(previewTimer){const speedEl=$('speed');if(speedEl)speedEl.textContent=String(previewSpeed);status('Đang xem trước · tốc độ mô phỏng '+previewSpeed+' km/h');}
 }
 function setVehicleScale(v){
  vehicleScale=Math.max(.65,Math.min(1.65,Number(v)||1));
@@ -1155,9 +1202,9 @@ function showTab(tab){
 function closeSheet(){$('sheet').style.display='none';$('tabMap').classList.add('active');['tabRoute','tabAlerts','tabSettings'].forEach(id=>$(id).classList.remove('active'))}
 function clearRoute(){
  ++routeRequestId;stopRoutePreview();if(routeLine)map.removeLayer(routeLine);if(destinationMarker)map.removeLayer(destinationMarker);
- routeLine=destinationMarker=null;destination=routeData=null;steps=[];routeCoords=[];update3DRoute();navigating=false;stepIndex=0;offRouteSince=0;clearViaMarkers();$('guidanceAlert').style.display='none';$('laneHint').style.display='none';
+ routeLine=destinationMarker=null;destination=routeData=null;destinationLabel='';steps=[];routeCoords=[];update3DRoute();navigating=false;stepIndex=0;offRouteSince=0;clearViaMarkers();$('guidanceAlert').style.display='none';$('laneHint').style.display='none';
  map?.getContainer().classList.remove('nav3d');
- $('distance').textContent='-- km';$('eta').textContent='--';$('startNav').disabled=true;$('startNav').textContent='➤';$('turnBanner').style.display='none';$('destination').value='';$('etaDetails').textContent='Giờ đến dự kiến: -- · Có tính dự phòng';status('Đã xóa lộ trình');
+ $('distance').textContent='-- km';$('eta').textContent='--';$('startNav').disabled=true;$('startNav').textContent='➤';$('turnBanner').style.display='none';$('destination').value='';$('etaDetails').textContent='Giờ đến dự kiến: -- · Có tính dự phòng';refreshTripInfo();status('Đã xóa lộ trình');
 }
 (function(){
  let timer;
@@ -1188,13 +1235,13 @@ function updatePreviewVoice(position){
  if(bestDistance<=55&&previewGuidanceStage<2){
   previewGuidanceStage=2;
   setTurnBanner('XEM TRƯỚC · '+instruction.toUpperCase(),'Còn '+Math.round(bestDistance)+' mét');
-  speak('Thực hiện '+instruction+' ngay');
+  speak(instruction+' ngay');
  }
 }
 function startRoutePreview(){
  if(!routeCoords||routeCoords.length<2){status('Hãy tìm điểm đến để có tuyến xem trước.');return}
  stopRoutePreview();navigating=false;previewIndex=0;
- previewStartedAt=Date.now();previewLastTick=previewStartedAt;previewTravelledMeters=0;previewPosition=routeCoords?.length?[routeCoords[0][1],routeCoords[0][0]]:null;
+ previewStartedAt=Date.now();previewLastTick=previewStartedAt;previewLastCameraAt=0;previewTravelledMeters=0;previewPosition=routeCoords?.length?[routeCoords[0][1],routeCoords[0][0]]:null;
  previewGuidanceStep=-1;previewGuidanceStage=0;previewLastSpoken=-1;
  previewDistances=[0];
  for(let i=1;i<routeCoords.length;i++)previewDistances[i]=previewDistances[i-1]+dist([routeCoords[i-1][1],routeCoords[i-1][0]],[routeCoords[i][1],routeCoords[i][0]]);
@@ -1203,9 +1250,9 @@ function startRoutePreview(){
  }else{
   map.getContainer().classList.add('nav3d');setTimeout(()=>map.invalidateSize(true),250);
   if(previewMarker)map.removeLayer(previewMarker);
-  previewMarker=L.marker([routeCoords[0][1],routeCoords[0][0]],{icon:vehicleIcon(),interactive:false}).addTo(map);
+  previewMarker=L.marker([routeCoords[0][1],routeCoords[0][0]],{icon:vehicleIcon(),interactive:false,zIndexOffset:1200}).addTo(map);
  }
- const total=previewDistances[previewDistances.length-1]||0;
+ const total=previewDistances[previewDistances.length-1]||0;const speedEl=$('speed');if(speedEl)speedEl.textContent=String(previewSpeed);
  status('Xem trước lộ trình · tốc độ ảo '+previewSpeed+' km/h'+(voiceEnabled?' · có giọng đọc':' · giọng đọc đang tắt'));
  const previewReportBtn=$('previewReportBtn');if(previewReportBtn)previewReportBtn.style.display='block';
  if(voiceEnabled)speak('Bắt đầu xem trước lộ trình. Tốc độ mô phỏng '+previewSpeed+' ki lô mét một giờ.');
@@ -1224,7 +1271,8 @@ function startRoutePreview(){
   const bearing=bearingBetween([a[1],a[0]],[b[1],b[0]]);
   if(is3DMode&&map3dReady){
    map3d.getSource('hnav-preview')?.setData({type:'FeatureCollection',features:[{type:'Feature',geometry:{type:'Point',coordinates:c},properties:{}}]});
-   map3d.easeTo({center:c,bearing,pitch:62,zoom:Math.max(16,map3d.getZoom()),duration:450});
+   if(map3dVehicleMarker){map3dVehicleMarker.setLngLat(c);const el=map3dVehicleMarker.getElement();if(el){el.innerHTML=vehicleSvg(vehicleType);const svg=el.querySelector('svg');if(svg){svg.style.width=(54*vehicleScale)+'px';svg.style.height=(66*vehicleScale)+'px';}}}
+   if(now-previewLastCameraAt>700){previewLastCameraAt=now;set3DDrivingCamera([c[1],c[0]],bearing,previewSpeed,650);}
   }else{
    if(previewMarker){
     previewMarker.setLatLng([c[1],c[0]]);
@@ -1235,7 +1283,7 @@ function startRoutePreview(){
   updatePreviewVoice([c[1],c[0]]);
  },250);
 }
-function stopRoutePreview(){if(previewTimer){clearInterval(previewTimer);previewTimer=null}const pr=$('previewReportBtn');if(pr)pr.style.display='none';previewLastTick=0;if(previewMarker&&map){map.removeLayer(previewMarker);previewMarker=null}if(map3dReady)map3d.getSource('hnav-preview')?.setData({type:'FeatureCollection',features:[]});if(!navigating&&map&&!driveAssist)map.getContainer().classList.remove('nav3d')}
+function stopRoutePreview(){if(previewTimer){clearInterval(previewTimer);previewTimer=null}const pr=$('previewReportBtn');if(pr)pr.style.display='none';previewLastTick=0;if(me&&smoothedSpeedKmh!==null&&$('speed'))$('speed').textContent=String(Math.round(smoothedSpeedKmh));if(previewMarker&&map){map.removeLayer(previewMarker);previewMarker=null}if(map3dReady)map3d.getSource('hnav-preview')?.setData({type:'FeatureCollection',features:[]});if(!navigating&&map&&!driveAssist)map.getContainer().classList.remove('nav3d')}
 function toggleMapPerspective(){if(!map)return;map.getContainer().classList.toggle('nav3d');setTimeout(()=>map.invalidateSize(true),250);status(map.getContainer().classList.contains('nav3d')?'Đã bật bản đồ 3D vector với công trình nổi khi có dữ liệu.':'Đã tắt phối cảnh bản đồ.')}
 function toggleCompactUI(){
  document.body.classList.remove('hnav-compact');
