@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>HieuNav</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:Arial,sans-serif;background:#101820;color:#fff}
+#map{position:absolute;inset:0;z-index:1}.top{position:absolute;z-index:500;top:12px;left:12px;right:12px;display:flex;gap:8px}
+input{min-width:0;flex:1;padding:14px;border:0;border-radius:12px;background:#fff;color:#111;font-size:16px;box-shadow:0 2px 10px #0005}
+button{border:0;border-radius:12px;padding:12px 15px;background:#1479e8;color:white;font-weight:bold;font-size:15px}
+.panel{position:absolute;z-index:500;left:12px;right:12px;bottom:14px;background:#101820f2;border:1px solid #45515c;border-radius:18px;padding:14px;box-shadow:0 3px 18px #0007}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px}.speed{font-size:48px;font-weight:bold;line-height:1}.unit{font-size:13px;color:#aebdca}.muted{color:#aebdca;font-size:13px;margin-top:6px}.limit{width:68px;height:68px;border:5px solid #e53935;border-radius:50%;background:white;color:#111;display:grid;place-items:center;font-size:25px;font-weight:bold}
+.actions{display:flex;gap:8px;margin-top:12px}.actions button{flex:1}.warn{background:#9e1b1b}.status{font-size:13px;color:#b7c8d7;margin-top:8px}
+.leaflet-control-attribution{font-size:10px!important}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="top"><input id="destination" placeholder="Nhập địa điểm cần đến"><button onclick="searchRoute()">ĐI</button></div>
+<div class="panel">
+ <div class="row">
+  <div><div class="unit">TỐC ĐỘ HIỆN TẠI</div><div class="speed" id="speed">--</div><div class="unit">km/h · GPS</div></div>
+  <div style="text-align:center"><div class="unit">GIỚI HẠN CÀI ĐẶT</div><div class="limit" id="limitBadge">80</div><div class="unit">km/h</div></div>
+  <div><div class="unit">QUÃNG ĐƯỜNG</div><strong id="distance">--</strong><div class="unit">đến điểm đích</div></div>
+ </div>
+ <div class="actions"><button onclick="centerOnMe()">VỊ TRÍ CỦA TÔI</button><button onclick="setLimit()">ĐỔI GIỚI HẠN</button><button class="warn" onclick="clearRoute()">XÓA TUYẾN</button></div>
+ <div class="status" id="status">Đang tải bản đồ… Cho phép HieuNav truy cập vị trí để bắt đầu.</div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+let map,me=null,meMarker=null,routeLine=null,destinationMarker=null,limit=80,alertAt=0,lastSpeedAlert=0;
+function status(t){document.getElementById('status').textContent=t}
+function init(){
+ map=L.map('map',{zoomControl:false}).setView([16.0,108.0],6);
+ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
+ status('Bản đồ đã tải. Đang chờ tín hiệu GPS.');
+}
+function hieuNavUpdateLocation(lat,lon,speed){
+ me=[lat,lon]; document.getElementById('speed').textContent=Math.round(speed);
+ if(!meMarker){meMarker=L.circleMarker(me,{radius:9,color:'#fff',weight:3,fillColor:'#1479e8',fillOpacity:1}).addTo(map);map.setView(me,16)}
+ else meMarker.setLatLng(me);
+ status('GPS hoạt động · '+lat.toFixed(5)+', '+lon.toFixed(5));
+ if(speed>limit && Date.now()-lastSpeedAlert>12000){lastSpeedAlert=Date.now();status('CẢNH BÁO: Bạn đang vượt giới hạn đã cài đặt!');try{HieuNavAndroid.vibrate()}catch(e){}}
+}
+function centerOnMe(){if(me)map.setView(me,17);else status('Chưa có vị trí GPS. Hãy bật định vị của điện thoại.')}
+function setLimit(){let n=prompt('Nhập giới hạn tốc độ (km/h):',limit);if(n!==null&&Number(n)>0&&Number(n)<201){limit=Number(n);document.getElementById('limitBadge').textContent=limit}}
+async function searchRoute(){
+ let q=document.getElementById('destination').value.trim();if(!q)return;
+ status('Đang tìm địa điểm…');
+ try{
+  let g=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q='+encodeURIComponent(q));
+  let a=await g.json();if(!a.length)throw new Error('Không tìm thấy địa điểm');
+  let dest=[Number(a[0].lat),Number(a[0].lon)];
+  if(destinationMarker)map.removeLayer(destinationMarker);
+  destinationMarker=L.marker(dest).addTo(map).bindPopup(a[0].display_name).openPopup();
+  if(me){
+   status('Đang tính tuyến đường…');
+   let r=await fetch('https://router.project-osrm.org/route/v1/driving/'+me[1]+','+me[0]+';'+dest[1]+','+dest[0]+'?overview=full&geometries=geojson');
+   let data=await r.json();if(!data.routes||!data.routes.length)throw new Error('Không tính được tuyến đường');
+   if(routeLine)map.removeLayer(routeLine);
+   routeLine=L.geoJSON(data.routes[0].geometry,{style:{color:'#1479e8',weight:6,opacity:.9}}).addTo(map);
+   document.getElementById('distance').textContent=(data.routes[0].distance/1000).toFixed(1)+' km';
+   map.fitBounds(routeLine.getBounds(),{padding:[35,35]});
+   status('Đã vẽ tuyến tham khảo. Kiểm tra biển báo thực tế và quy định giao thông.');
+  }else{map.setView(dest,14);status('Đã tìm thấy điểm đến. Đang chờ GPS để tính tuyến.')}
+ }catch(e){status('Không thể tìm/tính tuyến: '+e.message)}
+}
+function clearRoute(){if(routeLine)map.removeLayer(routeLine);if(destinationMarker)map.removeLayer(destinationMarker);routeLine=null;destinationMarker=null;document.getElementById('distance').textContent='--';status('Đã xóa tuyến đường')}
+window.hieuNavUpdateLocation= hieuNavUpdateLocation;
+window.addEventListener('load',init);
+</script>
+</body></html>
